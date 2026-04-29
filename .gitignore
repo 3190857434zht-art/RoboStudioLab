@@ -1,0 +1,27 @@
+# Runtime caches and local state
+backend/temp_exchange/
+backend/algorithms/backend/temp_exchange/
+backend/database/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Notebook/runtime byproducts
+**/.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Test/coverage artifacts
+coverage/
+*.coverage

@@ -1,0 +1,38 @@
+# 1. 使用官方的Python 3.9-slim镜像作为基础
+FROM python:3.9-slim
+
+# 2. 替换APT源为国内镜像 (阿里云)
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# 3. 安装系统级依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libgl1 \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. 设置工作目录
+WORKDIR /algorithm
+
+# --- 核心修正：指定正确的相对路径 ---
+# 5. 复制算法的依赖文件
+COPY code_as_policies/requirements.txt .
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+
+# 6. 复制算法代码
+COPY code_as_policies/ /algorithm/code_as_policies/
+
+# 7. 复制通用的 wrapper 脚本
+COPY wrapper.py /algorithm/wrapper.py
+
+# 8. 解压资源 (如果需要)
+WORKDIR /algorithm/code_as_policies
+RUN unzip -o robotiq_2f_85.zip -d assets/ && \
+    unzip -o bowl.zip -d assets/
+RUN cp -r assets/ur5e/ur5e/* assets/ur5e/ && rm -rf assets/ur5e/ur5e
+
+# 9. 返回到主工作目录
+WORKDIR /algorithm
+
+# 10. 容器启动时要执行的命令
+CMD ["python", "wrapper.py"]

@@ -1,0 +1,21 @@
+{
+    "requires_gpu": false,
+    "params": [
+        {
+            "name": "num_blocks",
+            "label": "物体数量 (0-10)",
+            "type": "slider",
+            "min": 0,
+            "max": 10,
+            "default": 4
+        },
+        {
+            "name": "num_bowls",
+            "label": "碗的数量 (0-10)",
+            "type": "slider",
+            "min": 0,
+            "max": 10,
+            "default": 3
+        }
+    ]
+}

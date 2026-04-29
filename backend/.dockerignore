@@ -1,0 +1,17 @@
+.git
+__pycache__/
+*.py[cod]
+
+# Local runtime state, never bake into images
+temp_exchange/
+algorithms/backend/temp_exchange/
+database/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local secrets and notebook byproducts
+.env
+.env.*
+!.env.example
+**/.ipynb_checkpoints/

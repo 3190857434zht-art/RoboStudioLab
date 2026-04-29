@@ -1,0 +1,11 @@
+{
+    "requires_gpu": false,
+    "params": [
+        {
+            "name": "model_source",
+            "label": "模型来源",
+            "type": "text_input",
+            "default": "openai" 
+        }
+    ]
+}

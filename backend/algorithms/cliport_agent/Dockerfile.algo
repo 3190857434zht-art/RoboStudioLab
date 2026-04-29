@@ -1,0 +1,85 @@
+# 1. 使用原版推荐的带 CUDA 和 OpenGL 支持的基础镜像
+FROM nvidia/cudagl:11.1.1-devel-ubuntu18.04
+
+# 2. 替换APT源为国内镜像 (阿里云 Ubuntu 18.04 源)
+RUN sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list && \
+    sed -i s@/security.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list
+
+# 3. 删除过期的 NVIDIA 源，防止 apt-get update 报错
+RUN rm /etc/apt/sources.list.d/cuda.list
+RUN rm /etc/apt/sources.list.d/nvidia-ml.list
+
+# 4. 安装核心系统依赖
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    python3-setuptools \
+    python3-dev \
+    ffmpeg \
+    libgl1-mesa-dev \
+    libglib2.0-0 \
+    git \
+    unzip \
+    build-essential \
+    gcc \
+    zlib1g-dev \
+    libjpeg-dev \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5. 设置工作目录
+WORKDIR /algorithm
+
+# 6. 复制依赖文件
+COPY cliport_agent/requirements.txt .
+
+# 7. 分步安装 PyTorch
+RUN pip3 install --no-cache-dir --default-timeout=2000 \
+   torch==1.9.1+cu111 \
+   -f https://mirrors.aliyun.com/pytorch-wheels/cu111/ \
+   -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
+RUN pip3 install --no-cache-dir --default-timeout=2000 \
+   torchvision==0.10.1+cu111 \
+   -f https://mirrors.aliyun.com/pytorch-wheels/cu111/ \
+   -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
+# 8. 精准处理 requirements.txt 并安装剩余依赖
+RUN sed -i 's/tdqm/tqdm/g' requirements.txt
+RUN sed -i '/torch==/d' requirements.txt
+RUN sed -i '/torchvision==/d' requirements.txt
+RUN pip3 install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip3 install --no-cache-dir --default-timeout=2000 -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+
+# 9. 复制算法代码
+COPY cliport_agent/ /algorithm/cliport_agent/
+
+# 10. 修复 CLIP 模型的 JIT Bug
+WORKDIR /algorithm/cliport_agent
+RUN python3 -c "import os, re; filepath = 'cliport/models/core/clip.py'; content = open(filepath).read(); q = chr(34); pattern = r'([ \t]*)graphs = \[module\.graph\] if hasattr\(module, ' + q + 'graph' + q + r'\) else \[\]'; repl = r'\1try:\n\1    graphs = [module.graph] if hasattr(module, ' + q + 'graph' + q + r') else []\n\1except RuntimeError:\n\1    graphs = []'; content = re.sub(pattern, repl, content); open(filepath, 'w').write(content)"
+
+# 10.5 缓解 GPU 显存峰值，先将权重加载到 CPU 内存，再转移到 GPU
+RUN python3 -c "import os; filepath = 'cliport/agents/transporter.py'; content = open(filepath).read(); content = content.replace('torch.load(model_path)', 'torch.load(model_path, map_location=\"cpu\")'); open(filepath, 'w').write(content)"
+
+# 11. 使用 --no-deps 强制忽略所有依赖，直接安装 CLIPort
+RUN pip3 install --no-deps -e .
+
+# 11.5 【核心修正】：修复 WSL2 下 Kornia 矩阵求逆的 cuSOLVER Bug (打全两个补丁)
+RUN sed -i 's/torch.inverse(src_norm_trans_src_pix)/torch.inverse(src_norm_trans_src_pix.cpu()).to(src_norm_trans_src_pix.device)/g' /usr/local/lib/python3.6/dist-packages/kornia/geometry/warp/homography_warper.py
+RUN sed -i 's/torch.inverse(dst_norm_trans_src_norm)/torch.inverse(dst_norm_trans_src_norm.cpu()).to(dst_norm_trans_src_norm.device)/g' /usr/local/lib/python3.6/dist-packages/kornia/geometry/transform/imgwarp.py
+
+# 12. 复制通用的 wrapper 脚本
+COPY wrapper.py /algorithm/wrapper.py
+
+# 13. 设置环境变量
+ENV CLIPORT_ROOT=/algorithm/cliport_agent
+ENV PYTHONPATH="${PYTHONPATH:-}:/algorithm/cliport_agent"
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV PYTHONIOENCODING=utf-8
+
+# 14. 容器启动命令
+WORKDIR /algorithm
+CMD ["python3", "wrapper.py"]

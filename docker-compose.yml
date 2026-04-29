@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: robot_arm_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      # --- 核心修正：使用 ${PWD} 动态获取宿主机当前目录 ---
+      # 这样无论项目放在哪台电脑的哪个目录下，都能正确映射
+      - HOST_EXCHANGE_DIR=${PWD}/backend/temp_exchange
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend
+    container_name: robot_arm_frontend
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./frontend:/app
+    environment:
+      # 本机部署时，用户浏览器通过 localhost 访问后端状态接口，用于自动刷新任务结果。
+      - BACKEND_PUBLIC_URL=http://localhost:8000
+    depends_on:
+      - backend

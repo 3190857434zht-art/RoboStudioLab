@@ -1,0 +1,11 @@
+{
+    "requires_gpu": true,
+    "params": [
+        {
+            "name": "model_task",
+            "label": "模型任务类型",
+            "type": "text_input",
+            "default": "multi-language-conditioned"
+        }
+    ]
+}
