@@ -1,17 +1,26 @@
 #!/bin/bash
 
-# Ensure we are in the directory where the script is located (Robust path handling)
+set -o pipefail
+
+# Ensure we are in the directory where the script is located (robust path handling)
 cd "$(dirname "$0")" || exit 1
 export PWD="$(pwd)"
+export HOST_EXCHANGE_DIR="$PWD/backend/temp_exchange"
+mkdir -p "$HOST_EXCHANGE_DIR"
 
 echo "======================================================="
-echo "Robot Arm Algorithm Visualization and Evaluation Platform"
+echo "RoboStudio"
 echo "======================================================="
 echo ""
 
 # Check if the directory exists
 if [ ! -d "backend/algorithms" ]; then
     echo "[ERROR] Cannot find backend/algorithms directory! Please run this script from the project root."
+    exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "[ERROR] Docker command was not found. Please install Docker and make sure it is running."
     exit 1
 fi
 
@@ -34,7 +43,8 @@ for dir in */; do
         docker build -t "$img_name" -f "$algo_dir/Dockerfile.algo" .
         
         if [ $? -ne 0 ]; then
-            echo "[ERROR] Failed to build $img_name! Please check if Docker is running."
+            echo "[ERROR] Failed to build $img_name."
+            echo "[ERROR] Please check the Docker build log above, Docker status, network access, and disk space."
             exit 1
         fi
         echo ""
@@ -48,11 +58,18 @@ echo "[2/2] Algorithm images built successfully. Starting main services..."
 echo ""
 
 # Try new docker compose, fallback to old docker-compose if it fails
-docker compose up --build -d || docker-compose up --build -d
+if ! docker compose up --build -d; then
+    echo "[WARN] docker compose failed, trying docker-compose..."
+    if ! docker-compose up --build -d; then
+        echo "[ERROR] Failed to start RoboStudio services."
+        echo "[ERROR] Please check the Compose log above, port usage for 8000/8501, and Docker status."
+        exit 1
+    fi
+fi
 
 echo ""
 echo "======================================================="
-echo "Services started successfully in the background!"
+echo "RoboStudio services started successfully in the background!"
 echo "Opening your browser..."
 echo "======================================================="
 

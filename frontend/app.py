@@ -15,7 +15,7 @@ BACKEND_URL = "http://backend:8000"
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000").rstrip("/")
 localS = LocalStorage()
 
-st.set_page_config(page_title="机械臂工作台", page_icon="🤖", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="RoboStudio", page_icon="🤖", layout="wide", initial_sidebar_state="expanded")
 
 # ── CSS ────────────────────────────────────────────────────────────────────
 st.markdown(
@@ -1135,7 +1135,7 @@ with st.sidebar:
                     st.rerun()
 
 # ========== 主区 ==========
-st.markdown('<span class="brand">机械臂代码生成与仿真</span>', unsafe_allow_html=True)
+st.markdown('<span class="brand">RoboStudio</span>', unsafe_allow_html=True)
 
 # ── 重命名反馈 ────────────────────────────────────────────────────────────
 if st.session_state.get("_rename_error"):
@@ -1163,7 +1163,7 @@ center_col = st.container()
 
 with center_col:
     st.markdown(
-        "<div style='text-align:left;font-size:22px;font-weight:700;line-height:1.4;margin-bottom:0.4rem;'>机械臂可视化操作平台</div>",
+        "<div style='text-align:left;font-size:22px;font-weight:700;line-height:1.4;margin-bottom:0.4rem;'>RoboStudio 机械臂可视化操作平台</div>",
         unsafe_allow_html=True,
     )
     with st.container(key="param_panel"):

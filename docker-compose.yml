@@ -1,25 +1,23 @@
-version: '3.8'
+name: robostudio
 
 services:
   backend:
     build: ./backend
-    container_name: robot_arm_backend
+    container_name: robostudio_backend
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
     environment:
-      # --- 核心修正：使用 ${PWD} 动态获取宿主机当前目录 ---
-      # 这样无论项目放在哪台电脑的哪个目录下，都能正确映射
-      - HOST_EXCHANGE_DIR=${PWD}/backend/temp_exchange
+      # The start scripts set this to an absolute host path so algorithm
+      # containers can mount the same exchange directory.
+      - HOST_EXCHANGE_DIR=${HOST_EXCHANGE_DIR}
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build: ./frontend
-    container_name: robot_arm_frontend
+    container_name: robostudio_frontend
     ports:
       - "8501:8501"
     volumes:
