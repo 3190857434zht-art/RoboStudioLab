@@ -1,59 +1,49 @@
 import pybullet as p
 import pybullet_data
-import time
 
-# 连接物理引擎
+# Connect to the physics engine
 p.connect(p.GUI)
 
-# 设置仿真参数
-p.setPhysicsEngineParameter(
-    fixedTimeStep=1/500,  # 更小的时间步长
-    numSolverIterations=200,
-    useSplitImpulse=1,
-    splitImpulsePenetrationThreshold=0.01
-)
-p.setAdditionalSearchPath(pybullet_data.getDataPath())
+# Set simulation parameters
 p.setGravity(0, 0, -9.8)
-
-# 加载地面
-floor = p.loadURDF("plane.urdf", [0, 0, 0], [0, 0, 0, 1])
-
-# 加载机械臂
-panda = p.loadURDF(
-    "franka_panda/panda.urdf",
-    [0, 0, 0.5],
-    p.getQuaternionFromEuler([0, 0, 0])
+p.setTimeStep(1 / 240.0)
+p.setPhysicsEngineParameter(
+    fixedTimeStep=1/500,  # smaller timestep for better stability
+    numSolverIterations=50
 )
+p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=0, cameraPitch=-40, cameraTargetPosition=[0, 0, 0])
 
-# 锁定基座关节
-p.createConstraint(
-    panda, -1, -1, -1,
-    p.JOINT_FIXED,
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 0, 0.5]
+# Load ground plane
+p.setAdditionalSearchPath(pybullet_data.getDataPath())
+p.loadURDF("plane.urdf")
+
+# Load robot arm
+robot_id = p.loadURDF(
+    "ur5e/ur5e.urdf",
+    basePosition=[0, 0, 0],
+    useFixedBase=True
 )
+num_joints = p.getNumJoints(robot_id)
 
-# 设置初始姿态和PD控制
-initial_positions = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]
-for i in range(p.getNumJoints(panda)):
-    if i < 7:
-        p.resetJointState(panda, i, initial_positions[i])
+# Lock base joints
+for joint_index in range(num_joints):
+    joint_info = p.getJointInfo(robot_id, joint_index)
+    if joint_info[2] == p.JOINT_FIXED:
+        p.setJointMotorControl2(robot_id, joint_index, p.POSITION_CONTROL, targetPosition=0)
+
+# Set initial pose and PD control
+initial_joint_positions = [0, -1.57, 1.57, -1.57, -1.57, 0]
+for i, pos in enumerate(initial_joint_positions):
+    p.resetJointState(robot_id, i, pos)
     p.setJointMotorControl2(
-        panda, i, p.POSITION_CONTROL,
-        targetPosition=initial_positions[i] if i < 7 else 0,
-        force=87,
-        positionGain=0.5,
-        velocityGain=1.0
+        robot_id, i, p.POSITION_CONTROL,
+        targetPosition=pos, force=500,
+        positionGain=0.03, velocityGain=1
     )
 
-# 调整相机
-p.resetDebugVisualizerCamera(3, 0, -50, [0, 0, 0.2])
+# Adjust camera
+p.resetDebugVisualizerCamera(cameraDistance=1.0, cameraYaw=90, cameraPitch=-30, cameraTargetPosition=[0.5, 0, 0.5])
 
-# 实时仿真循环
-p.setRealTimeSimulation(1)
-try:
-    while True:
-        time.sleep(1/500)
-except KeyboardInterrupt:
-    p.disconnect()
+# Real-time simulation loop
+while True:
+    p.stepSimulation()

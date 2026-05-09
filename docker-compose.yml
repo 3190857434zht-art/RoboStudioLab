@@ -23,7 +23,7 @@ services:
     volumes:
       - ./frontend:/app
     environment:
-      # 本机部署时，用户浏览器通过 localhost 访问后端状态接口，用于自动刷新任务结果。
+      # For local deployment, the browser accesses the backend status endpoint via localhost to auto-refresh job results.
       - BACKEND_PUBLIC_URL=http://localhost:8000
     depends_on:
       - backend

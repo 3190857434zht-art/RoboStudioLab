@@ -10,7 +10,7 @@ The user will provide a Python script. You need to perform two tasks:
     - Identify variables in the script that look like configurable parameters (e.g., `num_blocks = 4`, `robot_speed = 0.5`).
     - For each parameter, create a JSON object with the following fields:
       - `name`: The variable name (string).
-      - `label`: A user-friendly name in Chinese (string).
+      - `label`: A user-friendly display name in English (string).
       - `type`: The type of UI control. Use "slider" for numbers, "text_input" for strings.
       - `min`: (For sliders) A reasonable minimum value.
       - `max`: (For sliders) A reasonable maximum value.
@@ -57,7 +57,7 @@ Example JSON Output:
     "params": [
       {
         "name": "robot_speed",
-        "label": "机器人速度",
+        "label": "Robot Speed",
         "type": "slider",
         "min": 0.1,
         "max": 2.0,
@@ -65,7 +65,7 @@ Example JSON Output:
       },
       {
         "name": "num_obstacles",
-        "label": "障碍物数量",
+        "label": "Number of Obstacles",
         "type": "slider",
         "min": 0,
         "max": 20,

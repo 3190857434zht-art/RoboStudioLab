@@ -1,28 +1,28 @@
-# 1. 使用官方的Python 3.9-slim镜像作为基础
+# 1. Use the official Python 3.9-slim image as base
 FROM python:3.9-slim
 
-# 2. 替换APT源为国内镜像 (阿里云)
+# 2. Replace APT sources with a mirror (Aliyun)
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
-# 3. 安装系统级依赖 (根据需要添加)
+# 3. Install system-level dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. 设置工作目录
+# 4. Set working directory
 WORKDIR /algorithm
 
-# 5. 复制依赖文件并安装
-# 注意路径：我们从构建上下文(backend/algorithms)中复制
+# 5. Copy dependency file and install
+# Build context is backend/algorithms; paths are relative to that directory.
 COPY language_planner/requirements.txt .
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
-# 6. 复制算法代码
+# 6. Copy algorithm code
 COPY language_planner/ /algorithm/language_planner/
 
-# 7. 复制通用的 wrapper 脚本
+# 7. Copy the shared wrapper script
 COPY wrapper.py /algorithm/wrapper.py
 
-# 8. 容器启动时要执行的命令
+# 8. Container startup command
 CMD ["python", "wrapper.py"]

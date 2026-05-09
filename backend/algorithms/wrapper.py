@@ -16,29 +16,29 @@ def main():
         params = data.get('params', {})
         algorithm_name = data.get('algorithm_name')
 
-        # --- 核心修正：将算法的根目录添加到 sys.path ---
-        # 这样算法内部的绝对导入 (如 from sim_env import ...) 就能正常工作了
+        # Add the algorithm root directory to sys.path so that
+        # absolute imports inside the algorithm (e.g. from sim_env import ...) work correctly.
         algo_root_path = os.path.join('/algorithm', algorithm_name)
         if algo_root_path not in sys.path:
             sys.path.insert(0, algo_root_path)
 
-        # 动态导入算法模块
+        # Dynamically import the algorithm module
         module_name = f"{algorithm_name}.Interactive_Demo"
         algorithm_module = importlib.import_module(module_name)
 
-        # 3. 执行对应的函数
+        # Execute the corresponding function
         if mode == 'run_algorithm':
             if not hasattr(algorithm_module, 'run_algorithm'):
-                raise ImportError(f"模块 {module_name} 中未找到 'run_algorithm' 函数。")
+                raise ImportError(f"Function 'run_algorithm' not found in module {module_name}.")
             result = algorithm_module.run_algorithm(params)
         elif mode == 'run_from_code':
             if not hasattr(algorithm_module, 'run_from_code'):
-                raise ImportError(f"模块 {module_name} 中未找到 'run_from_code' 函数。")
+                raise ImportError(f"Function 'run_from_code' not found in module {module_name}.")
             result = algorithm_module.run_from_code(params)
         else:
-            raise ValueError(f"未知的运行模式: {mode}")
+            raise ValueError(f"Unknown run mode: {mode}")
 
-        # 4. 将结果写入共享目录
+        # Write result to the shared exchange directory
         with open(output_file, 'w') as f:
             json.dump(result, f)
 

@@ -3,7 +3,7 @@
     "params": [
         {
             "name": "num_blocks",
-            "label": "物体数量 (0-10)",
+            "label": "Number of Blocks (0-10)",
             "type": "slider",
             "min": 0,
             "max": 10,
@@ -11,7 +11,7 @@
         },
         {
             "name": "num_bowls",
-            "label": "碗的数量 (0-10)",
+            "label": "Number of Bowls (0-10)",
             "type": "slider",
             "min": 0,
             "max": 10,

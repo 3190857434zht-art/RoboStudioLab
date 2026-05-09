@@ -1,4 +1,4 @@
-#Interactive_Demo.py(language_planner)
+#Interactive_Demo.py (language_planner)
 import sys
 import os
 import io
@@ -11,16 +11,16 @@ from sentence_transformers import SentenceTransformer
 from sentence_transformers import util as st_utils
 from openai import OpenAI
 
-# --- 路径设置 ---
+# --- Path setup ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(current_dir, 'src')
 sys.path.append(src_dir)
 
-# --- 视频占位符 (Base64编码的一张图片，显示"No Video Available") ---
-# 这里为了简洁，使用一个简单的文本提示代替图片Base64，前端会处理
+# --- Video placeholder (signals to the frontend that this algorithm produces no video) ---
+# The frontend detects the NO_VIDEO_SUPPORTED sentinel and suppresses the video panel.
 VIDEO_PLACEHOLDER = "NO_VIDEO_SUPPORTED"
 
-# --- 全局缓存 ---
+# --- Global cache ---
 translation_lm = None
 action_list = None
 action_list_embedding = None
@@ -30,19 +30,19 @@ example_task_embedding = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def initialize_resources():
-    """初始化 SentenceTransformer 和本地数据"""
+    """Initialize SentenceTransformer and local data."""
     global translation_lm, action_list, action_list_embedding
     global available_examples, example_task_list, example_task_embedding
     
     if translation_lm is not None:
         return
 
-    print("正在初始化 Translation LM (用于语义匹配)...")
-    # 使用一个较小的模型以加快加载速度
+    print("Initializing Translation LM (for semantic matching)...")
+    # Use a small model to speed up loading
     translation_lm_id = 'all-MiniLM-L6-v2' 
     translation_lm = SentenceTransformer(translation_lm_id).to(device)
 
-    print("正在加载动作列表和示例库...")
+    print("Loading action list and example library...")
     with open(os.path.join(src_dir, 'available_actions.json'), 'r') as f:
         action_list = json.load(f)
     action_list_embedding = translation_lm.encode(action_list, batch_size=512, convert_to_tensor=True, device=device)
@@ -51,7 +51,7 @@ def initialize_resources():
         available_examples = json.load(f)
     example_task_list = [example.split('\n')[0] for example in available_examples]
     example_task_embedding = translation_lm.encode(example_task_list, batch_size=512, convert_to_tensor=True, device=device)
-    print("资源初始化完成。")
+    print("Resource initialization complete.")
 
 def find_most_similar(query_str, corpus_embedding):
     query_embedding = translation_lm.encode(query_str, convert_to_tensor=True, device=device)
@@ -66,33 +66,33 @@ def run_algorithm(params: dict):
     result = {"generated_code": "", "video": "", "log": ""}
 
     try:
-        # 1. 获取参数和API凭证
+        # 1. Get parameters and API credentials
         task = params.get('task_description', 'Make breakfast')
         api_key = params.get('openai_api_key')
         base_url = params.get('openai_base_url')
-        selected_model = params.get('selected_model', 'gpt-4-turbo') # 获取选择的模型
+        selected_model = params.get('selected_model', 'gpt-4-turbo')
 
         if not api_key or not base_url:
-            raise ValueError("需要提供 API Key 和 Base URL 来运行此算法。")
+            raise ValueError("API Key and Base URL are required to run this algorithm.")
 
-        # 初始化新版 OpenAI 客户端
+        # Initialize OpenAI client
         client = OpenAI(api_key=api_key, base_url=base_url)
 
-        print(f"--- Language Planner 开始运行 ---")
-        print(f"任务: {task}")
-        print(f"使用模型: {selected_model}")
+        print(f"--- Language Planner starting ---")
+        print(f"Task: {task}")
+        print(f"Model: {selected_model}")
 
-        # 2. 初始化本地资源
+        # 2. Initialize local resources
         initialize_resources()
 
-        # 3. 寻找最相似示例 (In-Context Learning)
+        # 3. Find the most similar in-context example (In-Context Learning)
         example_idx, _ = find_most_similar(task, example_task_embedding)
         example = available_examples[example_idx]
         
-        # 构建 Prompt
-        # 注意：原算法是自回归生成的(一步一步生成)，为了适配 Chat 接口，
-        # 我们将其简化为一次性生成整个计划，或者需要在一个循环中调用 Chat API。
-        # 这里为了效率和稳定性，我们采用一次性生成，并让模型遵循格式。
+        # Build prompt.
+        # The original algorithm generates plans auto-regressively (step by step).
+        # Here we simplify to a single LLM call that generates the entire plan at once,
+        # with the model instructed to follow the example format.
         
         system_prompt = """
         You are a robot planning agent. 
@@ -109,9 +109,9 @@ def run_algorithm(params: dict):
         Task: {task}
         """
 
-        print("正在调用大模型生成计划...")
+        print("Calling LLM to generate plan...")
         response = client.chat.completions.create(
-            model=selected_model, # 使用用户选择的模型
+            model=selected_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -121,42 +121,42 @@ def run_algorithm(params: dict):
         )
         
         raw_plan = response.choices[0].message.content
-        print("大模型返回原始计划。")
+        print("LLM returned raw plan.")
 
-        # 4. 将生成的文本映射到可用动作 (Translation)
-        # 原算法的核心步骤：确保生成的每一步都在 available_actions.json 中
-        print("正在将计划映射到可执行动作...")
+        # 4. Map generated text to available actions (Translation step)
+        # Core step of the original algorithm: ensure each generated step is in available_actions.json.
+        print("Mapping plan to executable actions...")
         final_plan_lines = []
         for line in raw_plan.split('\n'):
             line = line.strip()
             if not line or line.startswith('Task:'): continue
             
-            # 去掉 "Step 1: " 这样的前缀
+            # Strip "Step 1: " style prefixes
             action_text = line.split(': ')[-1] if ': ' in line else line
             
-            # 找到最相似的预定义动作
+            # Find the most similar predefined action via cosine similarity
             idx, score = find_most_similar(action_text, action_list_embedding)
             matched_action = action_list[idx]
             
             final_plan_lines.append(f"# Original: {action_text} -> Mapped: {matched_action}")
-            # 这里我们生成伪代码形式
+            # Generate pseudocode form
             final_plan_lines.append(f"robot.execute('{matched_action}')")
 
         result["generated_code"] = "\n".join(final_plan_lines)
-        print("规划完成。")
+        print("Planning complete.")
         
-        # 5. 设置视频状态
+        # 5. Set video status (no video for text-planning algorithms)
         result["video"] = VIDEO_PLACEHOLDER
 
     except Exception as e:
-        print(f"!!! 算法执行出错 !!!")
+        print(f"!!! Algorithm execution error !!!")
         print(traceback.format_exc())
         result['error'] = str(e)
     finally:
         result["log"] = log_stream.getvalue()
         sys.stdout = original_stdout
         log_stream.close()
-        print("--- 运行结束 ---")
+        print("--- Run finished ---")
     
     return result
 
@@ -168,21 +168,21 @@ def run_from_code(params: dict):
     
     try:
         code_to_run = params.get('code_to_run')
-        print("--- 执行生成的计划 ---")
-        print("正在解析并执行指令...")
+        print("--- Executing generated plan ---")
+        print("Parsing and executing instructions...")
         
-        # 模拟执行过程
+        # Simulate execution
         for line in code_to_run.split('\n'):
             if line.startswith("robot.execute"):
                 action = line.split("'")[1]
                 print(f"Executing: {action}")
-                time.sleep(0.5) # 模拟耗时
+                time.sleep(0.5)
         
-        print("执行完毕。")
+        print("Execution complete.")
         result["video"] = VIDEO_PLACEHOLDER
         
     except Exception as e:
-        print(f"执行出错: {e}")
+        print(f"Execution error: {e}")
         result['error'] = str(e)
     finally:
         result["log"] = log_stream.getvalue()

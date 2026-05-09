@@ -1,38 +1,38 @@
-# 1. 使用官方的Python 3.9-slim镜像作为基础
+# 1. Use the official Python 3.9-slim image as the base
 FROM python:3.9-slim
 
-# 2. 替换APT源为国内镜像 (阿里云)
+# 2. Replace APT sources with Aliyun mirror for faster downloads in China
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
-# 3. 安装系统级依赖
+# 3. Install system-level dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libgl1 \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. 设置主工作目录
+# 4. Set the main working directory
 WORKDIR /app
 
-# 5. 复制后端主应用的依赖并安装
+# 5. Copy and install backend dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
-# 6. 复制整个后端项目到工作目录
+# 6. Copy the entire backend project into the working directory
 COPY . .
 
-# 7. 解压必要的资源文件
+# 7. Unzip required asset files
 WORKDIR /app/algorithms/code_as_policies
 RUN unzip -o robotiq_2f_85.zip -d assets/ && \
     unzip -o bowl.zip -d assets/
 
-# --- 核心路径结构修正 ---
-# 8. 调整 ur5e 文件夹结构以匹配算法代码的加载路径
-#    使用 cp (copy) 和 rm (remove) 的组合来代替 mv，以强制覆盖目标目录
+# --- Core path structure fix ---
+# 8. Adjust the ur5e folder structure to match the asset loading path expected by the algorithm.
+#    Use cp (copy) + rm (remove) instead of mv to force-overwrite the target directory.
 RUN cp -r /app/algorithms/code_as_policies/assets/ur5e/ur5e/* /app/algorithms/code_as_policies/assets/ur5e/ && \
     rm -rf /app/algorithms/code_as_policies/assets/ur5e/ur5e
 
-# 9. 返回到主工作目录
+# 9. Return to the main working directory
 WORKDIR /app
 
-# 10. 启动命令将由 docker-compose.yml 提供
+# 10. The startup command is provided by docker-compose.yml

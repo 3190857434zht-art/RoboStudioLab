@@ -2,26 +2,26 @@ import sqlite3
 import json
 from datetime import datetime
 
-# 数据库文件路径
+# Path to the database file
 DATABASE_FILE = "database/history.db"
 
 def init_db():
     """
-    初始化数据库，创建 history 表。
-    如果表已存在，则不执行任何操作。
+    Initialize the database and create the history table.
+    If the table already exists, this is a no-op.
     """
-    # 确保 database 文件夹存在
+    # Ensure the database directory exists
     import os
     os.makedirs(os.path.dirname(DATABASE_FILE), exist_ok=True)
     
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     
-    # 创建表
+    # Create table.
     # status: 'success', 'failed', 'unsimulated'
-    # params: 存储运行时的所有参数，如物体数量、任务描述等
-    # result: 存储运行结果，如生成的代码、视频的引用（我们不直接存视频）、日志等
-    # notes: 存储用户备注
+    # params: all runtime parameters such as number of objects, task description, etc.
+    # result: run result including generated code, video reference (not stored directly), log, etc.
+    # notes: user-provided notes
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +37,7 @@ def init_db():
     )
     """)
 
-    # 迁移：添加分支/树结构所需的新列（如果不存在）
+    # Migration: add columns required for branch/tree structure if they do not already exist
     existing_columns = {row[1] for row in cursor.execute("PRAGMA table_info(history)").fetchall()}
     if "parent_id" not in existing_columns:
         cursor.execute("ALTER TABLE history ADD COLUMN parent_id INTEGER")
@@ -50,7 +50,7 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("数据库初始化完成。")
+    print("Database initialized.")
 
 
 def scrub_sensitive_history_params(cursor):
@@ -69,16 +69,16 @@ def scrub_sensitive_history_params(cursor):
         cursor.execute("UPDATE history SET params = ? WHERE id = ?", (json.dumps(params), row[0]))
 
 def get_db_connection():
-    """获取数据库连接"""
+    """Return a database connection."""
     conn = sqlite3.connect(DATABASE_FILE)
-    conn.row_factory = sqlite3.Row # 这让我们可以通过列名访问数据
+    conn.row_factory = sqlite3.Row  # Allows column access by name
     return conn
 
 def get_next_experiment_id():
-    """获取下一个主实验ID的数字部分 (No.X)"""
+    """Return the numeric part of the next root experiment ID (No.X)."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    # 只查找主干记录
+    # Query only root entries
     cursor.execute("SELECT experiment_id FROM history WHERE experiment_id GLOB 'No.[0-9]*'")
     records = cursor.fetchall()
     conn.close()
@@ -89,7 +89,7 @@ def get_next_experiment_id():
     max_id = 0
     for record in records:
         try:
-            # 只提取 'No.' 后面的数字部分
+            # Extract the numeric part after 'No.'
             num_str = record['experiment_id'].split('-')[0].replace('No.', '')
             num = int(num_str)
             if num > max_id:
@@ -101,10 +101,10 @@ def get_next_experiment_id():
 
 def add_history_record(record_data: dict):
     """
-    向数据库中添加一条新的历史记录。
-    record_data 是一个包含所有记录信息的字典。
-    若提供 parent_id / node_type / is_final，则按分支节点入库，
-    否则按主干（root）入库。
+    Insert a new history record into the database.
+    record_data is a dict containing all record fields.
+    If parent_id / node_type / is_final are provided, the record is stored as a branch node;
+    otherwise it is stored as a root entry.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -144,7 +144,7 @@ def add_history_record(record_data: dict):
     return new_id
 
 def update_record_status(record_id: int, new_status: str, result_data: dict):
-    """更新一个已有记录的状态和结果"""
+    """Update the status and result of an existing record."""
     conn = get_db_connection()
     result_str = json.dumps(result_data)
     conn.execute(
@@ -160,21 +160,21 @@ def update_record_status(record_id: int, new_status: str, result_data: dict):
     conn.close()
 
 def update_notes(record_id: int, notes: str):
-    """更新指定记录的备注"""
+    """Update the notes for a given record."""
     conn = get_db_connection()
     conn.execute("UPDATE history SET notes = ? WHERE id = ?", (notes, record_id))
     conn.commit()
     conn.close()
 
 def get_next_draft_num(parent_id=None):
-    """获取指定主条目下一个草稿编号。"""
+    """Return the next draft number under the specified root entry."""
     conn = get_db_connection()
     cursor = conn.cursor()
     if parent_id is None:
         cursor.execute(
             """
             SELECT experiment_name FROM history
-            WHERE experiment_name LIKE '草稿-%' OR experiment_name LIKE '新草稿-%'
+            WHERE experiment_name LIKE 'Draft-%' OR experiment_name LIKE 'New-Draft-%'
             """
         )
     else:
@@ -182,7 +182,7 @@ def get_next_draft_num(parent_id=None):
             """
             SELECT experiment_name FROM history
             WHERE parent_id = ?
-              AND (experiment_name LIKE '草稿-%' OR experiment_name LIKE '新草稿-%')
+              AND (experiment_name LIKE 'Draft-%' OR experiment_name LIKE 'New-Draft-%')
             """,
             (parent_id,),
         )
@@ -196,9 +196,9 @@ def get_next_draft_num(parent_id=None):
     for record in records:
         try:
             draft_name = record['experiment_name']
-            if draft_name.startswith('新草稿-'):
-                draft_name = draft_name.replace('新草稿-', '草稿-', 1)
-            num = int(draft_name.replace('草稿-', ''))
+            if draft_name.startswith('New-Draft-'):
+                draft_name = draft_name.replace('New-Draft-', 'Draft-', 1)
+            num = int(draft_name.replace('Draft-', ''))
             if num > max_num:
                 max_num = num
         except (ValueError, TypeError):
@@ -207,9 +207,10 @@ def get_next_draft_num(parent_id=None):
 
 
 def get_next_apply_code_num(parent_id=None):
-    """获取“应用代码-N”的下一个编号。
+    """Return the next Apply-Code-N number.
 
-    parent_id 为空时只统计主条目；有 parent_id 时只统计该主条目下的分支。
+    When parent_id is None, only root entries are counted;
+    when parent_id is provided, only branches under that root are counted.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -218,7 +219,7 @@ def get_next_apply_code_num(parent_id=None):
             """
             SELECT experiment_name FROM history
             WHERE parent_id IS NULL
-              AND experiment_name LIKE '应用代码-%'
+              AND experiment_name LIKE 'Apply-Code-%'
             """
         )
     else:
@@ -226,7 +227,7 @@ def get_next_apply_code_num(parent_id=None):
             """
             SELECT experiment_name FROM history
             WHERE parent_id = ?
-              AND experiment_name LIKE '应用代码-%'
+              AND experiment_name LIKE 'Apply-Code-%'
             """,
             (parent_id,),
         )
@@ -236,7 +237,7 @@ def get_next_apply_code_num(parent_id=None):
     max_num = 0
     for record in records:
         try:
-            num = int(str(record["experiment_name"]).replace("应用代码-", "", 1))
+            num = int(str(record["experiment_name"]).replace("Apply-Code-", "", 1))
             if num > max_num:
                 max_num = num
         except (ValueError, TypeError):

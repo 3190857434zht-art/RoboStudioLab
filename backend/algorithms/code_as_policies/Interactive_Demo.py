@@ -29,11 +29,11 @@ from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import TerminalFormatter
 
-# --- 全局变量：当前使用的模型名称 ---
+# --- Global variable: currently active model name ---
 CURRENT_MODEL_NAME = "gpt-4-turbo"
 
 # ==============================================================================
-# --- 核心类内置定义 ---
+# --- Core class definitions ---
 # ==============================================================================
 
 class LMP:
@@ -49,7 +49,7 @@ class LMP:
             try:
                 if client is None: raise ValueError("OpenAI client not initialized.")
                 code_str = client.chat.completions.create(
-                    model='gpt-4-turbo', # 或者使用您配置的模型变量
+                    model='gpt-4-turbo', # or use the globally configured model variable
                     messages=[{"role": "user", "content": prompt}],
                     stop=self._stop_tokens, temperature=self._cfg['temperature'],
                     max_tokens=self._cfg['max_tokens'], timeout=30.0
@@ -58,14 +58,14 @@ class LMP:
             except APITimeoutError as e: raise e
             except (RateLimitError, APIConnectionError) as e: print(f'API Error: {e}, retrying...'); sleep(10)
         
-        # --- 核心修正：重新加入代码清洗逻辑 ---
+        # Strip markdown fences and filter non-code lines from the model reply
         import re
-        # 尝试提取 Markdown 代码块
+        # Try to extract a Markdown code block
         match = re.search(r'```(?:python)?(.*?)```', code_str, re.DOTALL)
         if match:
             clean_code = match.group(1).strip()
         else:
-            # 如果没有代码块，尝试简单的逐行过滤
+            # Fall back to a simple line-by-line filter
             lines = code_str.split('\n')
             clean_lines = []
             for line in lines:
@@ -76,23 +76,23 @@ class LMP:
                     clean_lines.append(line)
             clean_code = '\n'.join(clean_lines).strip()
             if not clean_code:
-                print("警告：未能从模型回复中提取出有效代码！")
+                print("Warning: no valid code could be extracted from the model reply!")
                 clean_code = "# No valid code generated."
 
-        print(f"--- 原始返回 ---\n{code_str}\n--- 清洗后代码 ---\n{clean_code}\n----------------")
+        print(f"--- Raw reply ---\n{code_str}\n--- Cleaned code ---\n{clean_code}\n----------------")
         
-        # 使用清洗后的代码进行后续操作
+        # Proceed with the cleaned code
         to_exec = f'{context}\n{clean_code}' if self._cfg['include_context'] and context else clean_code
         new_fs = self._lmp_fgen.create_new_fs_from_code(clean_code) 
         self._variable_vars.update(new_fs)
         gvars = merge_dicts([self._fixed_vars, self._variable_vars])
         
-        # 增加执行前的错误捕获
+        # Catch execution errors before propagating
         try:
             exec_safe(to_exec, gvars, kwargs)
         except Exception as e:
-            print(f"执行生成的代码时出错: {e}")
-            print(f"尝试执行的代码:\n{to_exec}")
+            print(f"Error executing generated code: {e}")
+            print(f"Code attempted:\n{to_exec}")
             raise e
 
         self.exec_hist += f'\n{to_exec}'
@@ -140,7 +140,7 @@ class LMPFGen:
         try:
             parsed_code = ast.parse(code_str)
         except SyntaxError:
-            print("警告: 大模型返回的不是有效的Python代码，无法解析函数。")
+            print("Warning: model reply is not valid Python code; cannot parse functions.")
             return {}
         FunctionParser(fs, f_assigns).visit(parsed_code)
         for f_name, f_assign in f_assigns.items():
@@ -167,7 +167,7 @@ class LMPFGen:
         return new_fs
 
 # ==============================================================================
-# --- 全局变量和辅助函数 ---
+# --- Global variables and helper functions ---
 # ==============================================================================
 ALGORITHM_ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -192,13 +192,13 @@ def setup_exec_env(env, cfg, client_instance):
 
 def setup_LMP(env, cfg, client_instance):
     gvars = setup_exec_env(env, cfg, client_instance)
-    # 从 gvars 中获取已经正确初始化的 lmp_fgen 和其他变量
+    # Retrieve the already-initialized lmp_fgen from gvars
     lmp_fgen = gvars['parse_obj_name']._lmp_fgen
     lmp_tabletop_ui = LMP('tabletop_ui', cfg['lmps']['tabletop_ui'], lmp_fgen, gvars, gvars, client_instance)
     return lmp_tabletop_ui
 
 # ==============================================================================
-# --- API 函数 ---
+# --- API functions ---
 # ==============================================================================
 def run_algorithm(params: dict):
     global CURRENT_MODEL_NAME
@@ -212,10 +212,10 @@ def run_algorithm(params: dict):
     try:
         api_key = params.get('openai_api_key')
         base_url = params.get('openai_base_url')
-        if not (api_key and base_url): raise ValueError("API Key 或 Base URL 未提供。")
+        if not (api_key and base_url): raise ValueError("API Key or Base URL not provided.")
         local_client = OpenAI(api_key=api_key, base_url=base_url)
         
-        print("--- [新模拟] 开始运行 ---")
+        print("--- [New Simulation] Starting ---")
         user_input = params.get('task_description')
         num_blocks = params.get('num_blocks', 4)
         num_bowls = params.get('num_bowls', 3)
@@ -236,7 +236,7 @@ def run_algorithm(params: dict):
         
         lmp_tabletop_ui = setup_LMP(env, cfg_tabletop, local_client)
 
-        print('可用对象:', obj_list)
+        print('Available objects:', obj_list)
         lmp_tabletop_ui(user_input, f'objects = {env.object_list}')
         
         if hasattr(lmp_tabletop_ui, 'exec_hist') and lmp_tabletop_ui.exec_hist:
@@ -248,7 +248,7 @@ def run_algorithm(params: dict):
             with open(video_path, "rb") as f:
                 result["video"] = base64.b64encode(f.read()).decode('utf-8')
     except Exception as e:
-        print(f"!!! 算法执行出错 !!!\n{traceback.format_exc()}")
+        print(f"!!! Algorithm execution error !!!\n{traceback.format_exc()}")
         result['error'] = str(e)
     finally:
         result["log"] = log_stream.getvalue()
@@ -267,14 +267,14 @@ def run_from_code(params: dict):
     result = {"video": "", "log": ""}
     env = None
     try:
-        print("--- [应用代码] 开始运行 ---")
+        print("--- [Apply Code] Starting ---")
         code_to_run = params.get('code_to_run')
         num_blocks = params.get('num_blocks', 4)
         num_bowls = params.get('num_bowls', 3)
         api_key = params.get('openai_api_key')
         base_url = params.get('openai_base_url')
-        if not code_to_run or not code_to_run.strip(): raise ValueError("要执行的代码不能为空。")
-        if not (api_key and base_url): raise ValueError("执行包含LMP辅助函数的代码时，需要提供API Key和Base URL。")
+        if not code_to_run or not code_to_run.strip(): raise ValueError("Code to execute cannot be empty.")
+        if not (api_key and base_url): raise ValueError("API Key and Base URL are required when executing code that uses LMP helper functions.")
         
         local_client = OpenAI(api_key=api_key, base_url=base_url)
 
@@ -294,24 +294,24 @@ def run_from_code(params: dict):
         
         gvars = setup_exec_env(env, cfg_tabletop, local_client)
         
-        print('可用对象:', obj_list)
-        print("--- [应用代码] 开始语法检查 ---")
+        print('Available objects:', obj_list)
+        print("--- [Apply Code] Syntax check ---")
         compile(code_to_run, "<user_code>", "exec")
-        print("--- [应用代码] 语法检查通过，开始执行 ---")
+        print("--- [Apply Code] Syntax OK, executing ---")
         exec_safe(code_to_run, gvars, {})
-        print("--- [应用代码] 代码执行完成 ---")
+        print("--- [Apply Code] Execution complete ---")
 
         if env.cache_video:
-            print(f"--- [应用代码] 捕获到 {len(env.cache_video)} 帧，开始生成视频 ---")
+            print(f"--- [Apply Code] {len(env.cache_video)} frames captured, generating video ---")
             video_path = "/tmp/simulation_video_from_code.mp4"
             ImageSequenceClip(env.cache_video, fps=25).write_videofile(video_path, codec='libx264', logger=None)
             with open(video_path, "rb") as f:
                 result["video"] = base64.b64encode(f.read()).decode('utf-8')
-            print("--- [应用代码] 视频生成完成 ---")
+            print("--- [Apply Code] Video generation complete ---")
         else:
-            print("--- [应用代码] 代码执行结束，但没有捕获到视频帧 ---")
+            print("--- [Apply Code] Execution finished but no video frames were captured ---")
     except Exception as e:
-        print(f"!!! 代码执行出错 !!!\n{traceback.format_exc()}")
+        print(f"!!! Code execution error !!!\n{traceback.format_exc()}")
         result['error'] = str(e)
     finally:
         result["log"] = log_stream.getvalue()
@@ -323,7 +323,7 @@ def run_from_code(params: dict):
 
 
 # ==============================================================================
-# --- 原始算法代码区域 (LMP, Prompts, etc.) ---
+# --- Original algorithm code (LMP, Prompts, etc.) ---
 # ==============================================================================
 
 class LMP:
@@ -339,7 +339,6 @@ class LMP:
         self.exec_hist = ''
     def clear_exec_hist(self):
         self.exec_hist = ''
-    # --- 核心修正：确保方法名为 build_prompt (不带下划线) ---
     def build_prompt(self, query, context=''):
         if len(self._variable_vars) > 0:
             variable_vars_imports_str = f"from utils import {', '.join(self._variable_vars.keys())}"
@@ -354,7 +353,6 @@ class LMP:
         prompt += f'\n{use_query}'
         return prompt, use_query
     def __call__(self, query, context='', **kwargs):
-        # --- 核心修正：调用 self.build_prompt ---
         prompt, use_query = self.build_prompt(query, context=context)
         
         while True:
@@ -363,7 +361,7 @@ class LMP:
                     raise ValueError("OpenAI client not initialized. Please provide API key and base URL.")
                 
                 code_str = self.client.chat.completions.create(
-                    model=CURRENT_MODEL_NAME, # 确保这里使用的是全局变量 CURRENT_MODEL_NAME
+                    model=CURRENT_MODEL_NAME,
                     messages=[{"role": "user", "content": prompt}],
                     stop=self._stop_tokens,
                     temperature=self._cfg['temperature'],
@@ -376,7 +374,7 @@ class LMP:
             except (RateLimitError, APIConnectionError) as e:
                 print(f'API Error: {e}, retrying...'); sleep(10)
         
-        # --- 代码清洗逻辑 (确保这部分存在) ---
+        # Strip markdown fences and filter non-code lines
         import re
         match = re.search(r'```(?:python)?(.*?)```', code_str, re.DOTALL)
         if match:
@@ -392,9 +390,9 @@ class LMP:
                     clean_lines.append(line)
             clean_code = '\n'.join(clean_lines).strip()
             if not clean_code:
-                print("警告：未能从模型回复中提取出有效代码！")
+                print("Warning: no valid code could be extracted from the model reply!")
                 clean_code = "# No valid code generated."
-        print(f"--- 原始返回 ---\n{code_str}\n--- 清洗后代码 ---\n{clean_code}\n----------------")
+        print(f"--- Raw reply ---\n{code_str}\n--- Cleaned code ---\n{clean_code}\n----------------")
         
         to_exec = f'{context}\n{clean_code}' if self._cfg['include_context'] and context else clean_code
         
@@ -405,8 +403,8 @@ class LMP:
         try:
             exec_safe(to_exec, gvars, kwargs)
         except Exception as e:
-            print(f"执行生成的代码时出错: {e}")
-            print(f"尝试执行的代码:\n{to_exec}")
+            print(f"Error executing generated code: {e}")
+            print(f"Code attempted:\n{to_exec}")
             raise e
         self.exec_hist += f'\n{to_exec}'
         if self._cfg['maintain_session']: self._variable_vars.update(kwargs)
@@ -1001,7 +999,7 @@ lmp_tabletop_coords = {
         'table_z':       0.0,
       }
 
-def setup_LMP(env, cfg, client): # 确保 client 被接收
+def setup_LMP(env, cfg, client):
   cfg = copy.deepcopy(cfg)
   cfg['env'] = dict()
   cfg['env']['init_objs'] = list(env.obj_name_to_id.keys())
@@ -1012,7 +1010,7 @@ def setup_LMP(env, cfg, client): # 确保 client 被接收
   variable_vars = {k: getattr(LMP_env, k) for k in ['get_bbox', 'get_obj_pos', 'get_color', 'is_obj_visible', 'denormalize_xy', 'put_first_on_second', 'get_obj_names', 'get_corner_name', 'get_side_name']}
   variable_vars['say'] = lambda msg: print(f'robot says: {msg}')
   
-  # 将接收到的 client 传递给所有 LMP 实例
+  # Pass the received client to all LMP instances
   lmp_fgen = LMPFGen(cfg['lmps']['fgen'], fixed_vars, variable_vars, client)
   variable_vars.update({
       k: LMP(k, cfg['lmps'][k], lmp_fgen, fixed_vars, variable_vars, client)

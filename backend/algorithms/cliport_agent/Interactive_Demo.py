@@ -5,7 +5,7 @@ import base64
 import traceback
 import subprocess
 import glob
-import shutil  # 新增：用于复制文件
+import shutil
 
 ALGORITHM_ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 VIDEO_PLACEHOLDER = "E2E_NO_CODE_SUPPORTED"
@@ -17,7 +17,7 @@ def run_algorithm(params: dict):
     result = {"generated_code": "", "video": "", "log": ""}
 
     try:
-        print("--- CLIPort 开始运行 ---")
+        print("--- CLIPort starting ---")
         
         eval_task = params.get('task_description', 'stack-block-pyramid-seq-seen-colors')
         model_task = params.get('model_task', 'multi-language-conditioned')
@@ -25,24 +25,24 @@ def run_algorithm(params: dict):
         
         exp_folder = "exps" 
         
-        print(f"评估任务 (eval_task): {eval_task}")
-        print(f"模型类型 (model_task): {model_task}")
-        print(f"评估数量 (n_demos): {n_demos}")
+        print(f"Eval task: {eval_task}")
+        print(f"Model task: {model_task}")
+        print(f"Number of demos: {n_demos}")
 
-        # 强制使用 CPU 的环境变量设置
+        # Environment variables setup
         env = os.environ.copy()
         if "CUDA_VISIBLE_DEVICES" in env:
             del env["CUDA_VISIBLE_DEVICES"]
             
-        # --- 核心修正：修复 WSL2 下 cuSOLVER 初始化失败的 Bug ---
+        # Fix cuSOLVER initialization failure on WSL2
         env["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
         env["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
         # ==========================================
-        # 1. 自动生成测试数据集
+        # 1. Auto-generate test dataset
         # ==========================================
         dataset_dir = os.path.join(ALGORITHM_ROOT_PATH, "data", f"{eval_task}-test")
         if not os.path.exists(dataset_dir) or len(os.listdir(dataset_dir)) < n_demos:
-            print(f"\n>>> 未找到足够的测试数据，正在动态生成 {n_demos} 个 {eval_task} 的测试场景...")
+            print(f"\n>>> No sufficient test data found. Generating {n_demos} test scene(s) for {eval_task}...")
             demo_command = [
                 "python3", "cliport/demos.py",
                 f"n={n_demos}",
@@ -61,29 +61,29 @@ def run_algorithm(params: dict):
             )
             print(demo_process.stdout)
             if demo_process.returncode != 0:
-                raise RuntimeError(f"测试数据生成失败，退出码: {demo_process.returncode}")
-            print(">>> 测试数据生成完毕！\n")
+                raise RuntimeError(f"Test data generation failed, exit code: {demo_process.returncode}")
+            print(">>> Test data generation complete.\n")
         else:
-            print(f">>> 发现已存在的测试数据集，跳过生成步骤。\n")
+            print(f">>> Existing test dataset found, skipping generation.\n")
 
         # ==========================================
-        # 2. 修复缺失 last.ckpt 的问题 (适配其他任务)
+        # 2. Fix missing last.ckpt (for other tasks)
         # ==========================================
         ckpt_dir = os.path.join(ALGORITHM_ROOT_PATH, exp_folder, f"{model_task}-cliport-n1000-train", "checkpoints")
         last_ckpt_path = os.path.join(ckpt_dir, "last.ckpt")
         
         if os.path.exists(ckpt_dir) and not os.path.exists(last_ckpt_path):
-            # 找到目录下任意一个 .ckpt 文件
+            # Find any .ckpt file in the directory
             existing_ckpts = glob.glob(os.path.join(ckpt_dir, "*.ckpt"))
             if existing_ckpts:
                 source_ckpt = existing_ckpts[0]
-                print(f">>> 为兼容 {eval_task} 任务，自动将 {os.path.basename(source_ckpt)} 复制为 last.ckpt")
+                print(f">>> Copying {os.path.basename(source_ckpt)} as last.ckpt for task {eval_task} compatibility")
                 shutil.copy(source_ckpt, last_ckpt_path)
 
         # ==========================================
-        # 3. 运行评估脚本
+        # 3. Run evaluation script
         # ==========================================
-        print(">>> 开始执行模型评估并录制视频，请耐心等待...")
+        print(">>> Starting model evaluation and video recording, please wait...")
         command = [
             "python3", "cliport/eval.py",
             f"model_task={model_task}",
@@ -116,12 +116,12 @@ def run_algorithm(params: dict):
         process.wait()
 
         if process.returncode != 0:
-            raise RuntimeError(f"CLIPort 评估脚本执行失败，退出码: {process.returncode}")
+            raise RuntimeError(f"CLIPort evaluation script failed, exit code: {process.returncode}")
 
-        print("评估脚本执行完成。")
+        print("Evaluation script finished.")
 
         # ==========================================
-        # 4. 寻找生成的视频文件
+        # 4. Locate generated video file
         # ==========================================
         expected_video_dir = os.path.join(ALGORITHM_ROOT_PATH, exp_folder, f"{eval_task}-cliport-n1000-train", "videos")
         candidate_patterns = [
@@ -135,33 +135,37 @@ def run_algorithm(params: dict):
 
         if mp4_files:
             latest_video = max(set(mp4_files), key=os.path.getctime)
-            print(f"找到生成的视频: {latest_video}")
+            print(f"Video found: {latest_video}")
             with open(latest_video, "rb") as f:
                 result["video"] = base64.b64encode(f.read()).decode('utf-8')
         else:
-            print(f"警告: 未找到视频文件。优先检查目录: {expected_video_dir}")
+            print(f"Warning: no video file found. Primary search directory: {expected_video_dir}")
 
-        # 自动获取当前算法的文件夹名称
         algo_name = os.path.basename(ALGORITHM_ROOT_PATH)
-        result["generated_code"] = f"# {algo_name} 是端到端模型，不生成中间代码。\n# 请查看日志了解评估详情。"
+        result["generated_code"] = f"# {algo_name} is an end-to-end model; no intermediate code is generated.\n# See the run log for evaluation details."
 
     except Exception as e:
-        print(f"!!! 算法执行出错 !!!\n{traceback.format_exc()}")
+        print(f"!!! Algorithm execution error !!!\n{traceback.format_exc()}")
         result['error'] = str(e)
     finally:
         result["log"] = log_stream.getvalue()
         sys.stdout = original_stdout
         log_stream.close()
-        print("--- 运行结束 ---")
+        print("--- Run finished ---")
     
     return result
 
 # ==========================================
-# 补齐缺失的 run_from_code 函数
+# run_from_code: not supported for end-to-end models
 # ==========================================
 def run_from_code(params: dict):
     algo_name = os.path.basename(ALGORITHM_ROOT_PATH)
     return {
-        "video": VIDEO_PLACEHOLDER, 
-        "log": f"--- 拦截提示 ---\n{algo_name} 是端到端模型，直接输出底层动作，不支持通过修改代码来重新执行。\n请在左侧修改参数后点击“运行模拟”。"
+        "video": VIDEO_PLACEHOLDER,
+        "log": (
+            f"--- Intercept notice ---\n"
+            f"{algo_name} is an end-to-end model that directly outputs low-level actions "
+            f"and does not support re-execution via code modification.\n"
+            f'Please adjust parameters in the left panel and click "Run Simulation".'
+        )
     }

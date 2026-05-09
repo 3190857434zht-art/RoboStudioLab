@@ -16,7 +16,6 @@ class PickPlaceEnv():
     # Configure and start PyBullet.
     # python3 -m pybullet_utils.runServer
     # pybullet.connect(pybullet.SHARED_MEMORY)  # pybullet.GUI for local GUI.
-    # 连接 PyBullet
     pybullet.connect(pybullet.DIRECT)  # pybullet.GUI for local GUI.
     pybullet.configureDebugVisualizer(pybullet.COV_ENABLE_GUI, 0)
     pybullet.setPhysicsEngineParameter(enableFileCaching=0)
@@ -24,7 +23,6 @@ class PickPlaceEnv():
     pybullet.setAdditionalSearchPath(algorithm_root_path)
     pybullet.setAdditionalSearchPath(pybullet_data.getDataPath())
     pybullet.setTimeStep(self.dt)
-    # 设置机械臂的初始关节角度（home_joints）和末端执行器的初始姿态（home_ee_euler）
     self.home_joints = (np.pi / 2, -np.pi / 2, np.pi / 2, -np.pi / 2, 3 * np.pi / 2, 0)  # Joint angles: (J0, J1, J2, J3, J4, J5).
     self.home_ee_euler = (np.pi, 0, np.pi)  # (RX, RY, RZ) rotation in Euler angles.
     self.ee_link_id = 9  # Link ID of UR5 end effector.
@@ -35,7 +33,6 @@ class PickPlaceEnv():
     self.high_res = high_res
     self.high_frame_rate = high_frame_rate
 
-  # 重置仿真环境，加载指定物体并随机初始化其位置
   def reset(self, object_list):
     pybullet.resetSimulation(pybullet.RESET_USE_DEFORMABLE_WORLD)
     pybullet.setGravity(0, 0, -9.8)
@@ -114,7 +111,6 @@ class PickPlaceEnv():
 
     return self.get_observation()
 
-  # 通过位置控制将机械臂移动到指定的关节角度。
   def servoj(self, joints):
     """Move to target joint positions with position control."""
     pybullet.setJointMotorControlArray(
@@ -124,7 +120,6 @@ class PickPlaceEnv():
       targetPositions=joints,
       positionGains=[0.01]*6)
 
-  # 通过逆运动学将机械臂末端执行器移动到指定的三维位置
   def movep(self, position):
     """Move to target end effector position."""
     joints = pybullet.calculateInverseKinematics(
@@ -135,18 +130,15 @@ class PickPlaceEnv():
         maxNumIterations=100)
     self.servoj(joints)
 
-  # 获取机械臂末端执行器的当前三维位置。
   def get_ee_pos(self):
     ee_xyz = np.float32(pybullet.getLinkState(self.robot_id, self.tip_link_id)[0])
     return ee_xyz
 
-  # 任务执行
   def step(self, action=None):
     """Do pick and place motion primitive."""
     pick_pos, place_pos = action['pick'].copy(), action['place'].copy()
 
     # Set fixed primitive z-heights.
-    # 将夹爪移动到抓取位置上方
     hover_xyz = np.float32([pick_pos[0], pick_pos[1], 0.2])
     if pick_pos.shape[-1] == 2:
       pick_xyz = np.append(pick_pos, 0.025)
@@ -428,7 +420,7 @@ class PickPlaceEnv():
       is_higher = obj_a_pos[2] > obj_b_pos[2]
       return is_near and is_higher
 
-  # 中文颜色 / 物体名称 → 英文映射，用于兼容 LLM 生成的中文对象名
+  # Chinese color / object name → English mapping, for compatibility with Chinese object names from LLM output
   _ZH_COLOR_MAP = {
     '红色': 'red', '蓝色': 'blue', '绿色': 'green', '黄色': 'yellow',
     '紫色': 'purple', '棕色': 'brown', '橙色': 'orange', '粉色': 'pink',
@@ -437,13 +429,13 @@ class PickPlaceEnv():
   _ZH_OBJ_MAP = {'方块': 'block', '碗': 'bowl', '盒子': 'block', '积木': 'block'}
 
   def _translate_zh_name(self, obj_name):
-    """将形如 '红色的方块' 的中文对象名翻译为英文 'red block'"""
+    """Translate a Chinese object name such as '红色的方块' to its English form 'red block'."""
     name = obj_name
     for zh_color, en_color in self._ZH_COLOR_MAP.items():
       name = name.replace(zh_color, en_color)
     for zh_obj, en_obj in self._ZH_OBJ_MAP.items():
       name = name.replace(zh_obj, en_obj)
-    # 去掉助词"的"及多余空白，规范化为单空格
+    # Remove the Chinese particle '的' and normalize whitespace to single spaces
     name = name.replace('的', ' ')
     return ' '.join(name.split())
 
@@ -453,12 +445,12 @@ class PickPlaceEnv():
       if obj_name in self.obj_name_to_id:
         obj_id = self.obj_name_to_id[obj_name]
       else:
-        # 尝试常规别名替换
+        # Try common alias substitutions
         candidate = obj_name.replace('circle', 'bowl').replace('square', 'block').replace('small', '').strip()
         if candidate in self.obj_name_to_id:
           obj_id = self.obj_name_to_id[candidate]
         else:
-          # 尝试中文 → 英文翻译
+          # Try Chinese → English translation
           translated = self._translate_zh_name(obj_name)
           obj_id = self.obj_name_to_id[translated]
     except Exception:

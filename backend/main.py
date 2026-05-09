@@ -17,31 +17,31 @@ import json
 from datetime import datetime
 import traceback
 import docker
-import requests as _requests  # 仅用于捕获 docker SDK 抛出的 ReadTimeout
+import requests as _requests  # used only to catch ReadTimeout raised by the docker SDK
 import uuid
 import shutil
 
-# 初始化 Docker 客户端
+# Initialize the Docker client
 try:
     docker_client = docker.from_env()
 except Exception as e:
-    print(f"无法连接到 Docker 守护进程: {e}")
+    print(f"Failed to connect to Docker daemon: {e}")
     docker_client = None
 
-# ── 异步任务追踪表 ──────────────────────────────────────────────────────────
-# 结构: job_id -> {
+# ── Async job tracking table ─────────────────────────────────────────────────
+# Structure: job_id -> {
 #   "status": "running" | "done" | "failed" | "cancelled",
 #   "result": dict | None,
-#   "container": docker.Container | None,   # 用于强制终止
+#   "container": docker.Container | None,   # used for force-kill on cancel
 #   "cancelled": bool,
 # }
 active_jobs: dict = {}
 
-# --- FastAPI 生命周期事件 ---
+# --- FastAPI lifespan events ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.init_db()
-    # 清理旧交换目录，避免异常退出后残留 input.json 中的运行时密钥。
+    # Clean up the exchange directory to avoid residual input.json files with runtime credentials from a previous crash.
     shutil.rmtree("/app/temp_exchange", ignore_errors=True)
     os.makedirs("/app/temp_exchange", exist_ok=True)
     yield
@@ -56,20 +56,20 @@ app.add_middleware(
 
 
 def get_algorithm_config(algorithm_name: str) -> dict:
-    """读取算法配置；配置缺失时返回空字典，避免影响已有算法启动。"""
+    """Load algorithm config; returns an empty dict on missing config to avoid blocking existing algorithms."""
     config_path = os.path.join(os.path.dirname(__file__), "algorithms", algorithm_name, "config.json")
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"读取算法配置失败 {config_path}: {e}")
+        print(f"Failed to read algorithm config {config_path}: {e}")
         return {}
 
 
 def algorithm_requires_gpu(algorithm_name: str) -> bool:
     return bool(get_algorithm_config(algorithm_name).get("requires_gpu", False))
 
-# --- Pydantic 模型定义 ---
+# --- Pydantic model definitions ---
 class UnsimulatedRecordRequest(BaseModel):
     experiment_name: str = ""
     algorithm: str
@@ -77,13 +77,13 @@ class UnsimulatedRecordRequest(BaseModel):
     params: dict = {}
     code: str = ""
     notes: str = ""
-    record_id: Optional[int] = None  # 若提供则按 ID 更新已有草稿
-    parent_id: Optional[int] = None  # 若提供则保存为主条目下的分支草稿
+    record_id: Optional[int] = None  # if provided, update the existing draft by ID
+    parent_id: Optional[int] = None  # if provided, save as a branch draft under this root entry
 
 class RunRequest(BaseModel):
-    task_description: str = Field(..., description="用户的自然语言指令")
-    num_blocks: int = Field(4, ge=0, le=10, description="场景中方块的数量")
-    num_bowls: int = Field(4, ge=0, le=10, description="场景中碗的数量")
+    task_description: str = Field(..., description="Natural-language instruction from the user")
+    num_blocks: int = Field(4, ge=0, le=10, description="Number of blocks in the scene")
+    num_bowls: int = Field(4, ge=0, le=10, description="Number of bowls in the scene")
     openai_api_key: str = Field(..., description="OpenAI API Key")
     openai_base_url: str = Field(..., description="OpenAI API Base URL")
     selected_model: Optional[str] = "gpt-4-turbo"
@@ -91,18 +91,18 @@ class RunRequest(BaseModel):
     notes: str = None
 
 class ApplyCodeRequest(BaseModel):
-    code_to_run: str = Field(..., description="用户修改并希望执行的代码")
-    num_blocks: int = Field(4, ge=0, le=10, description="场景中方块的数量")
-    num_bowls: int = Field(4, ge=0, le=10, description="场景中碗的数量")
+    code_to_run: str = Field(..., description="Code edited by the user to be executed")
+    num_blocks: int = Field(4, ge=0, le=10, description="Number of blocks in the scene")
+    num_bowls: int = Field(4, ge=0, le=10, description="Number of bowls in the scene")
     openai_api_key: str = Field(..., description="OpenAI API Key")
     openai_base_url: str = Field(..., description="OpenAI API Base URL")
     selected_model: Optional[str] = "gpt-4-turbo"
     create_new_record: bool = False
     task_description: str = None
     algorithm: str = None
-    parent_id: Optional[int] = None  # 若提供，则把新记录写为该节点的子分支
+    parent_id: Optional[int] = None  # if provided, write the new record as a child branch of this node
     notes: Optional[str] = None
-    base_record_id: Optional[int] = None  # 仅作为信息字段保留，方便日志/调试
+    base_record_id: Optional[int] = None  # informational field retained for logging/debugging
 
 class RenameRequest(BaseModel):
     new_name: str
@@ -168,8 +168,8 @@ def sanitize_params_for_history(params: dict) -> dict:
 
 def preprocess_code_for_algorithm(algorithm_name: str, code_to_run: str) -> str:
     """
-    在不修改算法内部实现的前提下，对用户代码做最小兼容处理。
-    目前仅为 CAP(code_as_policies) 补充 robot 兼容对象。
+    Apply minimal compatibility preprocessing to user code without modifying algorithm internals.
+    Currently only injects a robot compatibility shim for CAP (code_as_policies).
     """
     code = code_to_run or ""
     if algorithm_name not in {"code_as_policies", "cap"}:
@@ -195,11 +195,12 @@ if 'robot' not in globals():
     return f"{compat_prelude}\n\n{code}"
 
 
-# ── 核心逻辑：在独立容器中运行算法（支持取消） ─────────────────────────────
+# ── Core logic: run an algorithm inside an isolated sibling container (with cancellation support) ─
 def _run_in_container_tracked(algorithm_name: str, mode: str, params: dict, job_id: str) -> dict:
     """
-    与原 run_in_container 等价，但会把容器引用存入 active_jobs[job_id]["container"]，
-    并每 2 秒检查一次取消标志，允许前端随时中止。
+    Equivalent to the original run_in_container, but stores the container reference in
+    active_jobs[job_id]["container"] and polls a cancellation flag every 2 seconds so the
+    frontend can abort the job at any time.
     """
     if not docker_client:
         return {"error": "Docker client not initialized.", "log": ""}
@@ -209,7 +210,7 @@ def _run_in_container_tracked(algorithm_name: str, mode: str, params: dict, job_
     try:
         docker_client.images.get(image_name)
     except docker.errors.ImageNotFound:
-        return {"error": f"找不到算法镜像: {image_name}。请先构建它。", "log": ""}
+        return {"error": f"Algorithm image not found: {image_name}. Please build it first.", "log": ""}
 
     run_id = str(uuid.uuid4())
     host_exchange_base = os.environ.get("HOST_EXCHANGE_DIR")
@@ -229,7 +230,7 @@ def _run_in_container_tracked(algorithm_name: str, mode: str, params: dict, job_
     with open(os.path.join(container_exchange_dir, "input.json"), "w") as f:
         json.dump(input_data, f)
 
-    print(f"[job={job_id}] 启动容器 {image_name} 执行 {mode}...")
+    print(f"[job={job_id}] Starting container {image_name} for mode={mode}...")
     container = None
     try:
         env_vars = {
@@ -258,48 +259,48 @@ def _run_in_container_tracked(algorithm_name: str, mode: str, params: dict, job_
             try:
                 container = _start_container(use_gpu=True)
             except Exception as gpu_err:
-                fallback_log = f"GPU 容器启动失败，已尝试 CPU 模式重试: {gpu_err}"
+                fallback_log = f"GPU container failed to start, retrying in CPU-only mode: {gpu_err}"
                 print(f"[job={job_id}] {fallback_log}")
                 container = _start_container(use_gpu=False)
         else:
             container = _start_container(use_gpu=False)
 
-        # 将容器引用存入追踪表，以便前端取消时可以 kill
+        # Store the container reference so a cancel request can kill it
         if job_id in active_jobs:
             active_jobs[job_id]["container"] = container
 
-        # 等待容器结束：每 2 秒一个轮询周期，期间检查取消标志
+        # Wait for the container to finish: poll every 2 seconds and check the cancellation flag
         exit_info = None
         while True:
             if active_jobs.get(job_id, {}).get("cancelled"):
-                print(f"[job={job_id}] 检测到取消信号，正在终止容器...")
+                print(f"[job={job_id}] Cancellation signal detected, terminating container...")
                 try:
                     container.kill()
                 except Exception:
                     pass
-                return {"error": "cancelled", "log": "任务被用户取消。"}
+                return {"error": "cancelled", "log": "Job cancelled by user."}
 
             try:
-                # container.wait(timeout=2) 在容器仍在运行且超时后会抛 ReadTimeout
+                # container.wait(timeout=2) raises ReadTimeout while the container is still running
                 exit_info = container.wait(timeout=2)
-                break  # 容器已结束
+                break  # container has finished
             except _requests.exceptions.ReadTimeout:
-                continue  # 超时 → 容器还在运行，继续轮询
+                continue  # timeout → container still running, keep polling
             except _requests.exceptions.ConnectionError:
-                # docker SDK 在某些版本超时也走 ConnectionError 分支
+                # Some docker SDK versions raise ConnectionError on timeout as well
                 continue
             except Exception as wait_err:
-                print(f"[job={job_id}] container.wait 异常: {wait_err}")
+                print(f"[job={job_id}] container.wait exception: {wait_err}")
                 break
 
         if exit_info is None:
             exit_info = {"StatusCode": -1}
 
         exit_code = exit_info.get("StatusCode", -1)
-        print(f"[job={job_id}] 容器执行完毕，退出码: {exit_code}")
+        print(f"[job={job_id}] Container finished with exit code: {exit_code}")
 
         container_logs = container.logs().decode('utf-8')
-        print(f"--- 容器日志 ---\n{container_logs}\n--- 日志结束 ---")
+        print(f"--- Container logs ---\n{container_logs}\n--- End of logs ---")
 
         output_file = os.path.join(container_exchange_dir, "output.json")
         if os.path.exists(output_file):
@@ -308,23 +309,23 @@ def _run_in_container_tracked(algorithm_name: str, mode: str, params: dict, job_
             existing_log = output_data.get("log", "")
             if fallback_log:
                 existing_log = f"{fallback_log}\n\n{existing_log}".strip()
-            output_data["log"] = f"{existing_log}\n\n--- 容器标准输出 ---\n{container_logs}"
+            output_data["log"] = f"{existing_log}\n\n--- Container stdout ---\n{container_logs}"
         else:
             output_log = f"{fallback_log}\n\n{container_logs}".strip() if fallback_log else container_logs
-            output_data = {"error": "算法容器未生成 output.json", "log": output_log}
+            output_data = {"error": "Algorithm container did not produce output.json", "log": output_log}
 
         return output_data
 
     except Exception as e:
         error_traceback = traceback.format_exc()
-        print(f"[job={job_id}] 容器运行出错: {error_traceback}")
+        print(f"[job={job_id}] Container run error: {error_traceback}")
         logs = ""
         if container:
             try:
                 logs = container.logs().decode('utf-8')
             except Exception:
                 pass
-        return {"error": str(e), "log": f"{error_traceback}\n\n容器日志:\n{logs}"}
+        return {"error": str(e), "log": f"{error_traceback}\n\nContainer logs:\n{logs}"}
     finally:
         if container:
             try:
@@ -333,7 +334,7 @@ def _run_in_container_tracked(algorithm_name: str, mode: str, params: dict, job_
                 pass
         if os.path.exists(container_exchange_dir):
             shutil.rmtree(container_exchange_dir, ignore_errors=True)
-        # 清除容器引用，释放内存
+        # Clear the container reference to free memory
         if job_id in active_jobs:
             active_jobs[job_id]["container"] = None
 
@@ -344,7 +345,7 @@ def determine_status(result: dict, algorithm_name: Optional[str] = None) -> str:
 
     gen_code = result.get("generated_code", "")
     if gen_code and "# No valid code generated." in gen_code:
-        result["error"] = "大模型未能生成有效的 Python 代码。"
+        result["error"] = "The LLM did not produce valid Python code."
         return "failed"
 
     video = result.get("video")
@@ -352,17 +353,18 @@ def determine_status(result: dict, algorithm_name: Optional[str] = None) -> str:
         if algorithm_name == "language_planner" and gen_code:
             result["video"] = "NO_VIDEO_SUPPORTED"
             return "success"
-        result["error"] = "模拟过程未能生成视频或动画。"
+        result["error"] = "The simulation did not produce a video or animation."
         return "failed"
 
     return "success"
 
 
 def determine_apply_code_status(result: dict, algorithm_name: Optional[str] = None) -> str:
-    """应用代码时的状态判定。
+    """Determine status when applying user code.
 
-    CAP 这类可回放代码的算法必须执行成功并产出真实视频；文本计划/端到端算法
-    可以用占位值说明不返回视频，但只要算法返回 error 仍应判失败。
+    Algorithms that support code replay (e.g. CAP) must execute successfully and produce a real video;
+    text-planning and end-to-end algorithms may use sentinel values to indicate no video, but a non-empty
+    error field still maps to failed.
     """
     if "error" in result and result["error"]:
         return "failed"
@@ -371,7 +373,7 @@ def determine_apply_code_status(result: dict, algorithm_name: Optional[str] = No
     video_capable_algorithms = {"code_as_policies", "cap"}
     if algorithm_name in video_capable_algorithms:
         if not video or video in {"NO_VIDEO_SUPPORTED", "E2E_NO_CODE_SUPPORTED"}:
-            result["error"] = "代码已执行但未生成可播放视频，请查看运行日志定位问题。"
+            result["error"] = "Code executed but no playable video was generated. Check the run log for details."
             return "failed"
         return "success"
 
@@ -380,11 +382,11 @@ def determine_apply_code_status(result: dict, algorithm_name: Optional[str] = No
     return "success"
 
 
-# ── 后台异步任务：执行模拟，完成后写入数据库 ──────────────────────────────
+# ── Background async task: run the simulation and write to the database when done ──
 async def _run_job(job_id: str, algorithm_name: str, mode: str, params: dict, record_data: Optional[dict]):
     """
-    在线程池中执行阻塞的容器操作，保持事件循环畅通。
-    完成后更新 active_jobs 并写入历史数据库。
+    Runs the blocking container operation in a thread-pool executor to keep the event loop free.
+    Updates active_jobs and writes to the history database when finished.
     """
     loop = asyncio.get_event_loop()
 
@@ -400,15 +402,15 @@ async def _run_job(job_id: str, algorithm_name: str, mode: str, params: dict, re
     if job is None:
         return
 
-    # 被取消时不写数据库
+    # Do not write to the database when the job was cancelled
     if job.get("cancelled") or result.get("error") == "cancelled":
         job["status"] = "cancelled"
-        job["result"] = {"error": "cancelled", "log": "任务被用户取消。"}
+        job["result"] = {"error": "cancelled", "log": "Job cancelled by user."}
         return
 
     final_status = determine_status(result, algorithm_name)
 
-    # 写入数据库（在执行器中运行，避免阻塞事件循环）
+    # Write to the database in the executor to avoid blocking the event loop
     if record_data is not None:
         def _save_db():
             result_for_db = result.copy()
@@ -421,18 +423,18 @@ async def _run_job(job_id: str, algorithm_name: str, mode: str, params: dict, re
             node_id = await loop.run_in_executor(None, _save_db)
             result["node_id"] = node_id
         except Exception as e:
-            print(f"[job={job_id}] 数据库写入失败: {e}")
+            print(f"[job={job_id}] Database write failed: {e}")
 
     job["status"] = "done" if final_status == "success" else "failed"
     job["result"] = result
-    print(f"[job={job_id}] 任务完成，状态: {job['status']}")
+    print(f"[job={job_id}] Job finished with status: {job['status']}")
 
 
-# --- API 端点 ---
+# --- API endpoints ---
 
 @app.get("/")
 def read_root():
-    return {"message": "后端服务已成功启动！"}
+    return {"message": "Backend service started successfully."}
 
 @app.get("/algorithms")
 def get_algorithms():
@@ -448,7 +450,7 @@ def get_algorithms():
     return {"algorithms": list(set(algo_names))}
 
 
-# ── 任务状态查询 ─────────────────────────────────────────────────────────────
+# ── Job status query ──────────────────────────────────────────────────────────
 @app.get("/status/{job_id}")
 def get_job_status(job_id: str):
     job = active_jobs.get(job_id)
@@ -461,7 +463,7 @@ def get_job_status(job_id: str):
     return response
 
 
-# ── 任务取消 ─────────────────────────────────────────────────────────────────
+# ── Job cancellation ──────────────────────────────────────────────────────────
 @app.post("/cancel/{job_id}")
 async def cancel_job(job_id: str):
     job = active_jobs.get(job_id)
@@ -473,7 +475,7 @@ async def cancel_job(job_id: str):
 
     job["cancelled"] = True
 
-    # 如果容器引用已注册，立即 kill
+    # If the container reference is already registered, kill it immediately
     container = job.get("container")
     if container:
         loop = asyncio.get_event_loop()
@@ -481,14 +483,14 @@ async def cancel_job(job_id: str):
             try:
                 container.kill()
             except Exception as kill_err:
-                print(f"[cancel] kill 失败: {kill_err}")
+                print(f"[cancel] kill failed: {kill_err}")
         await loop.run_in_executor(None, _kill)
 
-    print(f"[cancel] job_id={job_id} 已标记取消")
+    print(f"[cancel] job_id={job_id} marked as cancelled")
     return {"cancelled": True}
 
 
-# ── 运行模拟（非阻塞，立即返回 job_id） ──────────────────────────────────────
+# ── Run simulation (non-blocking, returns job_id immediately) ─────────────────
 @app.post("/run/{algorithm_name}")
 async def run_simulation(algorithm_name: str, request: RunRequest):
     job_id = str(uuid.uuid4())
@@ -499,11 +501,11 @@ async def run_simulation(algorithm_name: str, request: RunRequest):
         "cancelled": False,
     }
     print(
-        f"[job={job_id}] 前端选择: algorithm={algorithm_name}, "
+        f"[job={job_id}] Frontend selected: algorithm={algorithm_name}, "
         f"mode=run_algorithm, selected_model={request.selected_model}"
     )
 
-    # 提前准备好数据库记录所需信息（不含视频）
+    # Prepare the database record fields up front (excluding video)
     next_id_num = database.get_next_experiment_id()
     experiment_id = f"No.{next_id_num}"
     record_data = {
@@ -517,13 +519,13 @@ async def run_simulation(algorithm_name: str, request: RunRequest):
         "notes": request.notes,
     }
 
-    # 在后台运行，不阻塞当前请求
+    # Run in the background without blocking the current request
     asyncio.create_task(_run_job(job_id, algorithm_name, "run_algorithm", request.dict(), record_data))
 
     return {"job_id": job_id, "status": "running"}
 
 
-# ── 应用代码并模拟（非阻塞） ──────────────────────────────────────────────────
+# ── Apply code and re-simulate (non-blocking) ──────────────────────────────────
 @app.post("/apply_code/{algorithm_name}")
 async def apply_code(algorithm_name: str, request: ApplyCodeRequest):
     job_id = str(uuid.uuid4())
@@ -534,7 +536,7 @@ async def apply_code(algorithm_name: str, request: ApplyCodeRequest):
         "cancelled": False,
     }
     print(
-        f"[job={job_id}] 前端选择: algorithm={algorithm_name}, "
+        f"[job={job_id}] Frontend selected: algorithm={algorithm_name}, "
         f"mode=run_from_code, selected_model={request.selected_model}"
     )
 
@@ -545,8 +547,8 @@ async def apply_code(algorithm_name: str, request: ApplyCodeRequest):
     if request.create_new_record:
         algo_name_for_db = request.algorithm if request.algorithm else algorithm_name
         if request.parent_id is not None:
-            # 在已有主干节点下创建已模拟的应用代码分支。
-            branch_name = f"应用代码-{database.get_next_apply_code_num(request.parent_id)}"
+            # Create a simulated Apply-Code branch under an existing root entry.
+            branch_name = f"Apply-Code-{database.get_next_apply_code_num(request.parent_id)}"
             record_data = {
                 "experiment_id": branch_name,
                 "experiment_name": branch_name,
@@ -563,8 +565,8 @@ async def apply_code(algorithm_name: str, request: ApplyCodeRequest):
                 "notes": request.notes or "",
             }
         else:
-            # 没有可挂载的主条目时，创建一个已模拟的应用代码主条目。
-            experiment_id = f"应用代码-{database.get_next_apply_code_num()}"
+            # No root entry to attach to: create a standalone simulated Apply-Code root entry.
+            experiment_id = f"Apply-Code-{database.get_next_apply_code_num()}"
             record_data = {
                 "experiment_id": experiment_id,
                 "experiment_name": experiment_id,
@@ -580,7 +582,7 @@ async def apply_code(algorithm_name: str, request: ApplyCodeRequest):
             }
 
     async def _apply_job(jid: str, algo: str, pl: dict, rd):
-        """apply_code 专用后台任务：需要把用户代码补回 result 中。"""
+        """Background task for apply_code: writes the user code back into the result."""
         loop = asyncio.get_event_loop()
 
         def _blocking():
@@ -597,10 +599,10 @@ async def apply_code(algorithm_name: str, request: ApplyCodeRequest):
 
         if job.get("cancelled") or result.get("error") == "cancelled":
             job["status"] = "cancelled"
-            job["result"] = {"error": "cancelled", "log": "任务被用户取消。"}
+            job["result"] = {"error": "cancelled", "log": "Job cancelled by user."}
             return
 
-        # 把用户代码补回
+        # Write the user code back into the result envelope
         result["generated_code"] = request.code_to_run
 
         final_status = determine_apply_code_status(result, algo)
@@ -617,18 +619,18 @@ async def apply_code(algorithm_name: str, request: ApplyCodeRequest):
                 node_id = await loop.run_in_executor(None, _save_db)
                 result["node_id"] = node_id
             except Exception as e:
-                print(f"[job={jid}] 数据库写入失败: {e}")
+                print(f"[job={jid}] Database write failed: {e}")
 
         job["status"] = "done" if final_status == "success" else "failed"
         job["result"] = result
-        print(f"[job={jid}] apply_code 完成，状态: {job['status']}")
+        print(f"[job={jid}] apply_code finished with status: {job['status']}")
 
     asyncio.create_task(_apply_job(job_id, algorithm_name, payload, record_data))
 
     return {"job_id": job_id, "status": "running"}
 
 
-# ... 历史记录 API ...
+# --- History record API ---
 @app.get("/history")
 def get_history():
     conn = database.get_db_connection()
@@ -724,10 +726,10 @@ def get_algorithm_params(algorithm_name: str):
 def save_draft_record(request: UnsimulatedRecordRequest):
     conn = database.get_db_connection()
     params_str = json.dumps(request.params)
-    result_str = json.dumps({"generated_code": request.code, "log": "这是一个草稿，尚未运行。"})
+    result_str = json.dumps({"generated_code": request.code, "log": "This is a draft and has not been run yet."})
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 优先按 record_id 更新
+    # Update by record_id if provided
     if request.record_id is not None:
         row = conn.execute("SELECT id, experiment_name FROM history WHERE id = ?", (request.record_id,)).fetchone()
         if row is None:
@@ -757,7 +759,7 @@ def save_draft_record(request: UnsimulatedRecordRequest):
         conn.close()
         return {"message": "Draft updated successfully", "id": request.record_id, "name": record_name}
 
-    # 按名称查重（兼容旧逻辑）
+    # Deduplicate by name (legacy compatibility)
     existing = conn.execute(
         "SELECT id FROM history WHERE experiment_name = ?",
         (request.experiment_name,)
@@ -817,7 +819,7 @@ def save_draft_record(request: UnsimulatedRecordRequest):
 
 @app.get("/history/tree")
 def get_history_tree():
-    """返回带有子节点列表的树形历史记录结构。"""
+    """Return history records as a tree structure with child-node lists."""
     conn = database.get_db_connection()
     rows = conn.execute("SELECT * FROM history ORDER BY id ASC").fetchall()
     conn.close()
@@ -845,16 +847,16 @@ def get_history_tree():
 
 @app.post("/history/branch")
 def create_branch(request: BranchRequest):
-    """从指定父节点创建一条分支草稿记录。"""
+    """Create a branch draft record under the specified parent node."""
     conn = database.get_db_connection()
 
     parent = conn.execute("SELECT id FROM history WHERE id = ?", (request.parent_id,)).fetchone()
     if parent is None:
         conn.close()
-        raise HTTPException(status_code=404, detail="父节点不存在")
+        raise HTTPException(status_code=404, detail="Parent node not found")
 
     params_str = json.dumps(request.params)
-    result_str = json.dumps({"generated_code": request.code, "log": "这是一个分支草稿，尚未运行。"})
+    result_str = json.dumps({"generated_code": request.code, "log": "This is a branch draft and has not been run yet."})
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cursor = conn.cursor()
@@ -888,12 +890,12 @@ def create_branch(request: BranchRequest):
 
 @app.post("/history/finalize")
 def finalize_node(request: FinalizeRequest):
-    """将指定节点标记为最终版本（★ 定稿）。"""
+    """Mark the specified node as the final version (★)."""
     conn = database.get_db_connection()
     row = conn.execute("SELECT id FROM history WHERE id = ?", (request.node_id,)).fetchone()
     if row is None:
         conn.close()
-        raise HTTPException(status_code=404, detail="节点不存在")
+        raise HTTPException(status_code=404, detail="Node not found")
     conn.execute("UPDATE history SET is_final = 1 WHERE id = ?", (request.node_id,))
     conn.commit()
     conn.close()
@@ -902,34 +904,34 @@ def finalize_node(request: FinalizeRequest):
 
 @app.post("/history/{record_id:int}/mark-final")
 def mark_branch_final(record_id: int, request: MarkFinalRequest):
-    """将分支节点标记为最终版，并用其代码覆盖所属主条目。"""
+    """Mark a branch node as final and overwrite the root entry code with its code."""
     conn = database.get_db_connection()
     branch = conn.execute("SELECT * FROM history WHERE id = ?", (record_id,)).fetchone()
     if branch is None:
         conn.close()
-        raise HTTPException(status_code=404, detail="分支节点不存在")
+        raise HTTPException(status_code=404, detail="Branch node not found")
     if not branch["parent_id"] and branch["node_type"] != "branch":
         conn.close()
-        raise HTTPException(status_code=400, detail="只有分支节点可以标记为最终版")
+        raise HTTPException(status_code=400, detail="Only branch nodes can be marked as final")
 
     root_id = request.root_id or branch["parent_id"]
     visited = set()
     while root_id:
         if root_id in visited:
             conn.close()
-            raise HTTPException(status_code=400, detail="历史树存在循环父级")
+            raise HTTPException(status_code=400, detail="History tree has a circular parent reference")
         visited.add(root_id)
         root_row = conn.execute("SELECT id, parent_id FROM history WHERE id = ?", (root_id,)).fetchone()
         if root_row is None:
             conn.close()
-            raise HTTPException(status_code=404, detail="主条目不存在")
+            raise HTTPException(status_code=404, detail="Root entry not found")
         if not root_row["parent_id"]:
             break
         root_id = root_row["parent_id"]
 
     if not root_id or root_id == record_id:
         conn.close()
-        raise HTTPException(status_code=400, detail="无法确定所属主条目")
+        raise HTTPException(status_code=400, detail="Cannot determine the owning root entry")
 
     root = conn.execute("SELECT * FROM history WHERE id = ?", (root_id,)).fetchone()
     branch_result = json.loads(branch["result"] or "{}")
@@ -965,12 +967,12 @@ def mark_branch_final(record_id: int, request: MarkFinalRequest):
 
 @app.post("/history/{record_id:int}/promote-main")
 def promote_to_main(record_id: int):
-    """将分支节点提升为主干（去除 parent_id，node_type 改为 root）。"""
+    """Promote a branch node to a root entry (clears parent_id and sets node_type to root)."""
     conn = database.get_db_connection()
     row = conn.execute("SELECT id FROM history WHERE id = ?", (record_id,)).fetchone()
     if row is None:
         conn.close()
-        raise HTTPException(status_code=404, detail="节点不存在")
+        raise HTTPException(status_code=404, detail="Node not found")
     conn.execute(
         "UPDATE history SET parent_id = NULL, node_type = 'root' WHERE id = ?",
         (record_id,),
@@ -988,37 +990,37 @@ def get_next_id():
 @app.get("/next_draft_id")
 def get_next_draft_id(parent_id: Optional[int] = None):
     next_num = database.get_next_draft_num(parent_id)
-    return {"next_draft_name": f"草稿-{next_num}"}
+    return {"next_draft_name": f"Draft-{next_num}"}
 
 @app.post("/models")
 async def get_available_models(request: ModelListRequest):
     if not request.api_key or not request.base_url:
-        return {"models": [], "error": "缺少 API Key 或 Base URL"}
+        return {"models": [], "error": "Missing API Key or Base URL"}
 
     try:
-        print(f"尝试获取模型列表，Base URL: {request.base_url}")
+        print(f"Fetching model list, Base URL: {request.base_url}")
         loop = asyncio.get_event_loop()
         def _list_models():
             client = OpenAI(api_key=request.api_key, base_url=request.base_url, timeout=30)
             return client.models.list()
         models_response = await loop.run_in_executor(None, _list_models)
         model_ids = sorted([m.id for m in models_response.data])
-        print(f"成功获取到 {len(model_ids)} 个模型。")
+        print(f"Successfully retrieved {len(model_ids)} models.")
         return {"models": model_ids}
     except Exception as e:
         import traceback
-        print(f"获取模型列表失败:\n{traceback.format_exc()}")
+        print(f"Failed to fetch model list:\n{traceback.format_exc()}")
         return {"models": [], "error": str(e)}
 
 
 @app.post("/chat")
 async def chat_completion(request: ChatRequest):
     if not request.api_key or not request.base_url:
-        return JSONResponse(status_code=400, content={"detail": "缺少 API Key 或 Base URL"})
+        return JSONResponse(status_code=400, content={"detail": "Missing API Key or Base URL"})
     if not request.model:
-        return JSONResponse(status_code=400, content={"detail": "缺少模型名称"})
+        return JSONResponse(status_code=400, content={"detail": "Missing model name"})
     if not request.messages:
-        return JSONResponse(status_code=400, content={"detail": "消息不能为空"})
+        return JSONResponse(status_code=400, content={"detail": "Messages cannot be empty"})
 
     try:
         loop = asyncio.get_event_loop()
@@ -1034,4 +1036,4 @@ async def chat_completion(request: ChatRequest):
             reply = completion.choices[0].message.content or ""
         return {"reply": reply}
     except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": f"聊天请求失败: {e}"})
+        return JSONResponse(status_code=500, content={"detail": f"Chat request failed: {e}"})

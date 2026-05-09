@@ -3,7 +3,7 @@
     "params": [
         {
             "name": "model_source",
-            "label": "模型来源",
+            "label": "Model Source",
             "type": "text_input",
             "default": "openai" 
         }

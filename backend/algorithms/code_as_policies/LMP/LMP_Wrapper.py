@@ -15,22 +15,18 @@ class LMP_wrapper():
 
     self._table_z = self._cfg['env']['coords']['table_z']
     self.render = render
-# 是否在object列表里
   def is_obj_visible(self, obj_name):
     return obj_name in self.object_names
 
   def get_obj_names(self):
     return self.object_names[::]
-# 归一化坐标转化为实际坐标
   def denormalize_xy(self, pos_normalized):
     return pos_normalized * self._range_xy + self._min_xy
-# 四个角落的实际位置
   def get_corner_positions(self):
     unit_square = box(0, 0, 1, 1)
     normalized_corners = np.array(list(unit_square.exterior.coords))[:4]
     corners = np.array(([self.denormalize_xy(corner) for corner in normalized_corners]))
     return corners
-# 中点位置
   def get_side_positions(self):
     side_xs = np.array([0, 0.5, 0.5, 1])
     side_ys = np.array([0.5, 0, 1, 0.5])
@@ -38,7 +34,6 @@ class LMP_wrapper():
     side_positions = np.array(([self.denormalize_xy(corner) for corner in normalized_side_positions]))
 
     return side_positions
-# 物体xy位置，基于env.get_obj_pos(obj_name)
   def get_obj_pos(self, obj_name):
     # return the xy position of the object in robot base frame
     return self.env.get_obj_pos(obj_name)[:2]
@@ -56,7 +51,6 @@ class LMP_wrapper():
     for color, rgb in COLORS.items():
       if color in obj_name:
         return rgb
-# 物体操作
   def pick_place(self, pick_pos, place_pos):
     pick_pos_xyz = np.r_[pick_pos, [self._table_z]]
     place_pos_xyz = np.r_[place_pos, [self._table_z]]
@@ -68,11 +62,9 @@ class LMP_wrapper():
     pick_pos = self.get_obj_pos(arg1) if isinstance(arg1, str) else arg1
     place_pos = self.get_obj_pos(arg2) if isinstance(arg2, str) else arg2
     self.env.step(action={'pick': pick_pos, 'place': place_pos})
-# 机器人位置
   def get_robot_pos(self):
     # return robot end-effector xy position in robot base frame
     return self.env.get_ee_pos()
-# 机器人移动，根据坐标
   def goto_pos(self, position_xy):
     # move the robot end-effector to the desired xy position while maintaining same z
     ee_xyz = self.env.get_ee_pos()
@@ -81,7 +73,6 @@ class LMP_wrapper():
       self.env.movep(position_xyz)
       self.env.step_sim_and_render()
       ee_xyz = self.env.get_ee_pos()
-# 按照轨迹traj移动，以此执行goto_pos
   def follow_traj(self, traj):
     for pos in traj:
       self.goto_pos(pos)

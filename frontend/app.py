@@ -21,7 +21,7 @@ st.set_page_config(page_title="RoboStudio", page_icon="🤖", layout="wide", ini
 st.markdown(
     """
 <style>
-/* ── 全局 ── */
+/* ── Global ── */
 nav[data-testid="stSidebarNav"] { display: none !important; }
 div[data-testid="stSidebarNav"] { display: none !important; }
 ul[data-testid="stSidebarNavItems"] { display: none !important; }
@@ -29,14 +29,14 @@ div[data-testid="stSidebarNavSeparator"] { display: none !important; }
 .block-container { padding-top: 0.25rem !important; }
 .brand { font-size: 1.15rem; font-weight: 600; }
 
-/* ── 侧边栏整体 ── */
+/* ── Sidebar ── */
 section[data-testid="stSidebar"] > div { padding: 0.5rem 0.4rem 0.4rem !important; }
 section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0 !important; }
 section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
   margin: 0 !important; padding: 0 !important;
 }
 
-/* ── 侧边栏内的 Streamlit 按钮（刷新、保存、操作等） ── */
+/* ── Sidebar Streamlit buttons (refresh, save, actions, etc.) ── */
 section[data-testid="stSidebar"] .stButton { margin: 0 !important; }
 section[data-testid="stSidebar"] .stButton > button {
   font-size: 12px !important; line-height: 1.05 !important;
@@ -55,7 +55,7 @@ section[data-testid="stSidebar"] .stButton > button {
 section[data-testid="stSidebar"] .stButton > button:hover {
   background: rgba(128,128,128,0.15) !important;
 }
-/* 历史树：贴近 VS Code，使用等宽字体和更紧凑间距 */
+/* History tree: VS Code style, monospace font, compact spacing */
 section[data-testid="stSidebar"] div[class*="st-key-tree_select_"] button,
 section[data-testid="stSidebar"] div[class*="st-key-tree_rename_"] button,
 section[data-testid="stSidebar"] div[class*="st-key-tree_mark_final_"] button {
@@ -87,7 +87,7 @@ section[data-testid="stSidebar"] div[class*="st-key-tree_mark_final_"] .stButton
   width: 22px !important;
   overflow: visible !important;
 }
-/* 侧边栏内 text_input 紧凑 */
+/* Compact text_input in sidebar */
 section[data-testid="stSidebar"] .stTextInput { margin: 0 !important; }
 section[data-testid="stSidebar"] .stTextInput input {
   font-size: 11px !important;
@@ -143,7 +143,7 @@ section[data-testid="stSidebar"] div[class*="st-key-history_search"] input {
 }
 section[data-testid="stSidebar"] .stTextInput label { display: none; }
 
-/* ── 主区参数栏 icon 按钮：无边框无气泡 ── */
+/* ── Main area parameter icon buttons: borderless, no tooltip ── */
 .icon-btn > div > button, .icon-btn button {
   min-height: 24px !important; max-height: 24px !important;
   width: 24px !important; padding: 0 !important;
@@ -200,7 +200,7 @@ div.st-key-param_header_row div[data-testid="stHorizontalBlock"] {
 div.st-key-param_header_row p {
   margin: 0 !important;
 }
-/* 标题 markdown 垂直居中 */
+/* Title markdown vertical center */
 div.st-key-param_header_row .stMarkdown {
   display: flex !important;
   align-items: center !important;
@@ -296,7 +296,7 @@ div.st-key-notes_section .stTextArea {
   margin-top: 0 !important;
 }
 
-/* ── 设置图标：隐藏 popover 下拉箭头（保留点击弹窗功能） ── */
+/* ── Settings icon: hide popover dropdown arrow (keep click-popup) ── */
 div.st-key-param_header_row [data-testid="stPopover"] {
   margin: 0 !important;
   padding: 0 !important;
@@ -325,7 +325,7 @@ div.st-key-param_header_row [data-testid="stPopover"] button::after {
   display: none !important;
   content: none !important;
 }
-/* 消除 popover 按钮右侧自动插入的 caret 容器 */
+/* Remove auto-inserted caret container on popover button */
 div.st-key-param_header_row [data-testid="stPopover"] button [class*="caret"],
 div.st-key-param_header_row [data-testid="stPopover"] button [class*="arrow"],
 div.st-key-param_header_row [data-testid="stPopover"] button [class*="chevron"] {
@@ -337,7 +337,7 @@ div.st-key-param_header_row [data-testid="stPopover"] button [class*="chevron"] 
 )
 
 
-# ── 工具函数 ────────────────────────────────────────────────────────────────
+# ── Utility functions ────────────────────────────────────────────────────────
 
 def parse_json_field(value, default):
     if isinstance(value, dict):
@@ -363,7 +363,7 @@ def api_put(path, payload, timeout=30):
 
 
 def cancel_current_job():
-    """取消当前正在运行的模拟任务（如有）。"""
+    """Cancel the currently running simulation job (if any)."""
     job_id = st.session_state.get("current_job_id")
     if job_id and st.session_state.get("is_simulation_running"):
         try:
@@ -446,13 +446,13 @@ def get_params_for_algorithm(algorithm_name):
 
 def fetch_models(api_key, base_url):
     if not api_key or not base_url:
-        return [], "缺少 API Key 或 Base URL"
+        return [], "Missing API Key or Base URL"
     try:
         resp = api_post("/models", {"api_key": api_key, "base_url": base_url}, timeout=60)
         if resp.status_code == 200:
             data = resp.json()
             return data.get("models", []), data.get("error")
-        return [], f"HTTP 错误: {resp.status_code}"
+        return [], f"HTTP Error: {resp.status_code}"
     except requests.exceptions.RequestException as e:
         return [], str(e)
 
@@ -467,7 +467,7 @@ def flatten_nodes(nodes, result=None):
 
 
 def normalize_history_tree(nodes):
-    """按 parent_id 重建树；无父级草稿保留为独立主条目。"""
+    """Rebuild tree by parent_id; parentless drafts remain as independent root entries."""
     flat_nodes = []
 
     def collect(items):
@@ -504,7 +504,7 @@ def normalize_history_tree(nodes):
 
 
 def filter_main_history_nodes(nodes, query):
-    """只按主条目名称筛选，匹配后保留其分支草稿。"""
+    """Filter by root entry name only, preserving branch drafts of matching entries."""
     keyword = (query or "").strip().lower()
     if not keyword:
         return nodes
@@ -525,8 +525,8 @@ def history_status_color(node):
 
 
 def find_main_root_id(node_id, node_map):
-    """从任意节点向上回溯到所属的主干（root）id。
-    若 node 已是 root（无 parent_id），则返回它自己。
+    """Traverse up from any node to find its root entry id.
+    If the node is already a root (no parent_id), returns itself.
     """
     if node_id is None:
         return None
@@ -547,7 +547,7 @@ def find_main_root_id(node_id, node_map):
 def load_node_to_state(node):
     autosave_current_code(force=True)
 
-    # 切换历史节点时，强制取消正在进行的模拟任务
+    # Cancel any running simulation when switching history nodes
     cancel_current_job()
 
     params = parse_json_field(node.get("params"), {})
@@ -555,14 +555,14 @@ def load_node_to_state(node):
     new_code = result.get("generated_code") or result.get("code") or ""
     st.session_state.selected_node_id = node["id"]
     st.session_state.code_editor = new_code
-    st.session_state.ace_editor_version += 1  # 强制重建编辑器以刷新内容
+    st.session_state.ace_editor_version += 1  # Force editor rebuild to refresh content
     st.session_state.simulation_video = result.get("video")
     st.session_state.run_result = result
     st.session_state.notes_input = node.get("notes", "") or ""
     st.session_state.task_description = node.get("task_description", "") or ""
     st.session_state.selected_algorithm = node.get("algorithm")
     st.session_state.dynamic_params_from_node = params
-    # 跟踪草稿状态
+    # Track draft state
     is_draft = node.get("status") == "unsimulated"
     if is_draft:
         st.session_state.current_draft_id = node["id"]
@@ -580,8 +580,8 @@ def truncate_name_for_tree(name: str, depth: int) -> str:
 
 
 def commit_inline_rename(node_id: int, input_key: str):
-    """on_change 回调：在回调内调用 st.rerun() 可能被吞掉，
-    这里只更新 session_state，由 Streamlit 自然 rerun。"""
+    """on_change callback: calling st.rerun() inside a callback may be swallowed;
+    only update session_state here and let Streamlit naturally rerun."""
     new_name = (st.session_state.get(input_key) or "").strip()
     if not new_name:
         st.session_state.rename_node_id = None
@@ -589,15 +589,15 @@ def commit_inline_rename(node_id: int, input_key: str):
     try:
         resp = api_put(f"/history/{node_id}/rename", {"new_name": new_name})
         if resp.status_code != 200:
-            st.session_state["_rename_error"] = f"重命名失败: {resp.text}"
+            st.session_state["_rename_error"] = f"Rename failed: {resp.text}"
             return
-        # 成功：退出重命名模式，并清掉残留输入；Streamlit 会自动 rerun。
+        # Success: exit rename mode and clear leftover input; Streamlit will auto-rerun.
         st.session_state.rename_node_id = None
         st.session_state.pop(input_key, None)
-        st.session_state["_rename_toast"] = f"已重命名为 “{new_name}”"
+        st.session_state["_rename_toast"] = f'Renamed to "{new_name}"'
         invalidate_history_cache()
     except requests.exceptions.RequestException as e:
-        st.session_state["_rename_error"] = f"重命名失败: {e}"
+        st.session_state["_rename_error"] = f"Rename failed: {e}"
 
 
 def render_tree_nodes(nodes, guides=None):
@@ -610,7 +610,7 @@ def render_tree_nodes(nodes, guides=None):
         is_selected = st.session_state.selected_node_id == nid
         is_last = idx == len(nodes) - 1
 
-        # 用 | 绘制文件树式引导线；所有节点始终展开，不显示折叠箭头。
+        # Draw file-tree guide lines with |; all nodes always expanded, no collapse arrows.
         if guides:
             prefix = "".join("| " if g else "  " for g in guides[:-1]) + "| "
         else:
@@ -658,7 +658,7 @@ section[data-testid="stSidebar"] div.st-key-tree_select_{nid} button {{
                     label_visibility="collapsed",
                     on_change=commit_inline_rename,
                     args=(nid, rename_key),
-                    placeholder="输入新名称后回车",
+                    placeholder="Enter new name and press Enter",
                 )
             else:
                 if st.button(
@@ -673,11 +673,11 @@ section[data-testid="stSidebar"] div.st-key-tree_select_{nid} button {{
                 if st.button("★", key=f"tree_mark_final_{nid}", use_container_width=True):
                     resp = api_post(f"/history/{nid}/mark-final", {"root_id": node.get("parent_id")})
                     if resp.status_code == 200:
-                        st.toast("已标记最终版并覆盖主条目代码")
+                        st.toast("Marked as final and root entry code updated")
                         invalidate_history_cache()
                         st.rerun()
                     else:
-                        st.error(f"标记失败: {resp.text}")
+                        st.error(f"Mark failed: {resp.text}")
             rename_col = row_cols[2]
         else:
             rename_col = row_cols[1]
@@ -688,7 +688,7 @@ section[data-testid="stSidebar"] div.st-key-tree_select_{nid} button {{
                 st.session_state.rename_node_id = nid
                 st.rerun()
 
-        # 始终展开子节点（无折叠箭头）
+        # Always expand child nodes (no collapse arrows)
         if children:
             render_tree_nodes(children, guides + [not is_last])
 
@@ -697,9 +697,9 @@ def save_notes(node_id, notes):
     try:
         resp = api_put(f"/history/{node_id}/notes", {"notes": notes})
         if resp.status_code == 200:
-            st.toast("备注已保存")
+            st.toast("Notes saved")
     except requests.exceptions.RequestException as e:
-        st.error(f"保存备注失败: {e}")
+        st.error(f"Failed to save notes: {e}")
 
 
 def ensure_default_expanded(tree_nodes):
@@ -711,7 +711,7 @@ def ensure_default_expanded(tree_nodes):
             st.session_state.expanded_nodes.add(nid)
 
 
-# ── session 默认值 ───────────────────────────────────────────────────────────
+# ── Session defaults ───────────────────────────────────────────────────────────
 if "selected_node_id" not in st.session_state:
     st.session_state.selected_node_id = None
 if "code_editor" not in st.session_state:
@@ -725,7 +725,7 @@ if "run_result" not in st.session_state:
 if "notes_input" not in st.session_state:
     st.session_state.notes_input = ""
 if "task_description" not in st.session_state:
-    st.session_state.task_description = "把红色的方块放到蓝色的碗里"
+    st.session_state.task_description = "put the red block in the blue bowl"
 if "selected_algorithm" not in st.session_state:
     st.session_state.selected_algorithm = None
 if "available_models" not in st.session_state:
@@ -746,7 +746,7 @@ if "param_collapsed" not in st.session_state:
     st.session_state.param_collapsed = True
 if "current_draft_id" not in st.session_state:
     st.session_state.current_draft_id = None
-# ── 异步任务追踪 ─────────────────────────────────────────────────────────────
+# ── Async job tracking ─────────────────────────────────────────────────────────
 if "current_job_id" not in st.session_state:
     st.session_state.current_job_id = None
 if "is_simulation_running" not in st.session_state:
@@ -786,12 +786,12 @@ def autosave_current_code(force=False):
             st.session_state.last_autosaved_node_id = node_id
             st.session_state.last_autosaved_code = code
             st.session_state.last_autosave_at = now
-            st.session_state.autosave_status_msg = f"已自动保存 {datetime.now().strftime('%H:%M:%S')}"
+            st.session_state.autosave_status_msg = f"Auto-saved at {datetime.now().strftime('%H:%M:%S')}"
             invalidate_history_cache()
             return True
-        st.session_state.autosave_status_msg = f"自动保存失败：HTTP {resp.status_code}"
+        st.session_state.autosave_status_msg = f"Auto-save failed: HTTP {resp.status_code}"
     except requests.exceptions.RequestException as e:
-        st.session_state.autosave_status_msg = f"自动保存失败：{e}"
+        st.session_state.autosave_status_msg = f"Auto-save failed: {e}"
     return False
 
 
@@ -873,7 +873,7 @@ def sync_api_settings_to_browser_storage(api_key: str, api_url: str, model: str)
     )
 
 
-# ── 将模拟结果写入 session_state（需在 _poll_job_status 前定义） ─────────────
+# ── Write simulation result to session_state (must be defined before _poll_job_status) ─────────────
 def apply_simulation_response(data):
     st.session_state.run_result = data if isinstance(data, dict) else {}
     data = st.session_state.run_result
@@ -896,12 +896,12 @@ def apply_simulation_response(data):
     returned_node_id = data.get("node_id") or data.get("record_id") or nested_result.get("node_id")
     if returned_node_id:
         st.session_state.selected_node_id = returned_node_id
-        # 模拟结束后写入的节点是已仿真的分支（非草稿），重置 draft 跟踪。
+        # Node written after simulation is a simulated branch (not a draft), reset draft tracking.
         st.session_state.current_draft_id = None
         invalidate_history_cache()
 
 
-# ── 轮询后端：检查当前任务状态 ──────────────────────────────────────────────
+# ── Poll backend: check current job status ──────────────────────────────────────
 def _poll_job_status():
     job_id = st.session_state.current_job_id
     if not job_id or not st.session_state.is_simulation_running:
@@ -913,10 +913,10 @@ def _poll_job_status():
         return
 
     if resp.status_code == 404:
-        # 后端重启后 job 丢失
+        # Job lost after backend restart
         st.session_state.is_simulation_running = False
         st.session_state.current_job_id = None
-        st.session_state.sim_status_msg = "⚠️ 任务状态丢失（后端可能已重启）"
+        st.session_state.sim_status_msg = "⚠️ Job status lost (backend may have restarted)"
         return
 
     if resp.status_code != 200:
@@ -926,27 +926,27 @@ def _poll_job_status():
     status = data.get("status", "running")
 
     if status == "running":
-        return  # 继续等待
+        return  # keep waiting
 
-    # 任务结束
+    # Job finished
     st.session_state.is_simulation_running = False
     st.session_state.current_job_id = None
 
     if status == "cancelled":
-        st.session_state.sim_status_msg = "⚫ 模拟已取消"
+        st.session_state.sim_status_msg = "⚫ Simulation cancelled"
         return
 
     result = data.get("result") or {}
 
-    # 无论成功/失败都尝试同步可用的结果（视频、代码、日志），这样
-    # "代码生成成功但视频为空" 之类的中间态也能看到数据。
+    # Sync available results (video, code, log) regardless of success/failure, so
+    # intermediate states like "code generated but no video" still show data.
     apply_simulation_response(result)
 
     if status == "done":
-        st.session_state.sim_status_msg = "✅ 模拟完成"
+        st.session_state.sim_status_msg = "✅ Simulation complete"
     else:
-        err = result.get("error", "未知错误")
-        st.session_state.sim_status_msg = f"❌ 模拟失败：{err}"
+        err = result.get("error", "unknown error")
+        st.session_state.sim_status_msg = f"❌ Simulation failed: {err}"
 
 
 def render_browser_job_status(job_id: str):
@@ -957,7 +957,7 @@ def render_browser_job_status(job_id: str):
         f"""
 <div id="job-status-card">
   <span class="dot"></span>
-  <span id="job-status-text">模拟任务已启动...</span>
+  <span id="job-status-text">Simulation started...</span>
 </div>
 <script>
 const jobId = {job_id_json};
@@ -967,14 +967,14 @@ const cardEl = document.getElementById("job-status-card");
 
 async function pollJobStatus() {{
   if (!backendBase) {{
-    textEl.textContent = "模拟正在后端运行，请点击下方“检查并加载结果”同步状态。";
+    textEl.textContent = "Simulation running on the backend. Click \"Check and Load Results\" below to sync.";
     return;
   }}
   try {{
     const response = await fetch(`${{backendBase}}/status/${{jobId}}`, {{ cache: "no-store" }});
     if (response.status === 404) {{
       cardEl.className = "warning";
-      textEl.textContent = "任务状态丢失，请点击下方按钮同步页面状态。";
+      textEl.textContent = "Job status lost. Click the button below to sync page state.";
       return;
     }}
     if (!response.ok) {{
@@ -984,14 +984,14 @@ async function pollJobStatus() {{
     const payload = await response.json();
     if (payload.status === "running") {{
       cardEl.className = "";
-      textEl.textContent = "模拟运行中，正在自动检查状态...";
+      textEl.textContent = "Simulation running, checking status automatically...";
       window.setTimeout(pollJobStatus, 1000);
       return;
     }}
 
     function triggerStreamlitSync() {{
       const buttons = Array.from(window.parent.document.querySelectorAll("button"));
-      const syncButton = buttons.find((button) => button.textContent.includes("手动检查并加载结果"));
+      const syncButton = buttons.find((button) => button.textContent.includes("Check and Load Results"));
       if (syncButton) {{
         syncButton.click();
         return true;
@@ -1000,13 +1000,13 @@ async function pollJobStatus() {{
     }}
 
     cardEl.className = payload.status === "done" ? "done" : "warning";
-    textEl.textContent = "任务已结束，正在自动加载结果...";
+    textEl.textContent = "Job finished, loading results automatically...";
     if (!triggerStreamlitSync()) {{
-      textEl.textContent = "任务已结束，请点击下方按钮加载结果。";
+      textEl.textContent = "Job finished. Click the button below to load results.";
     }}
   }} catch (error) {{
     cardEl.className = "warning";
-    textEl.textContent = "自动检查暂时失败，稍后重试；也可点击下方按钮手动确认。";
+    textEl.textContent = "Auto-check failed temporarily, will retry; or click the button below to confirm manually.";
     window.setTimeout(pollJobStatus, 2000);
   }}
 }}
@@ -1064,9 +1064,9 @@ body {{
     )
 
 
-# 在渲染历史树和主区之前同步一次任务状态。
-# 这样任务结束时，视频、代码、日志和新增历史能在本轮渲染中直接更新，
-# 避免浏览器侧点击同步按钮后再触发一次全页 rerun 造成白屏闪烁。
+# Sync job status once before rendering the history tree and main area.
+# This ensures that when a job finishes, video, code, log, and history updates appear in the current render cycle,
+# avoiding a full-page rerun flash.
 if st.session_state.is_simulation_running:
     _poll_job_status()
 
@@ -1079,30 +1079,30 @@ if st.session_state.selected_node_id and st.session_state.selected_node_id in no
 else:
     active_node = None
 
-# ========== 左侧边栏：VS Code 文件树风格 ==========
+# ========== Left sidebar: VS Code file-tree style ==========
 with st.sidebar:
     st.markdown(
         '<span style="font-size:10px;font-weight:700;color:#888;letter-spacing:.08em">EXPLORER</span>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<span style="font-size:11px;font-weight:700;color:#666;letter-spacing:.04em">历史记录</span>',
+        '<span style="font-size:11px;font-weight:700;color:#666;letter-spacing:.04em">RUN HISTORY</span>',
         unsafe_allow_html=True,
     )
     history_search = st.text_input(
-        "搜索历史记录",
+        "Search history",
         key="history_search",
-        placeholder="搜索主条目名称",
+        placeholder="Search root entry name",
         label_visibility="collapsed",
     )
     display_tree_data = filter_main_history_nodes(tree_data, history_search)
 
     if not display_tree_data:
-        st.markdown('<p style="font-size:11px;color:#aaa;padding:4px 2px;margin:0">无记录</p>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:11px;color:#aaa;padding:4px 2px;margin:0">No records</p>', unsafe_allow_html=True)
     else:
         render_tree_nodes(display_tree_data)
 
-    # ── 当前节点操作工具栏 ──
+    # ── Current node action toolbar ──
     if active_node:
         aid = active_node["id"]
         root_id = find_main_root_id(aid, node_map)
@@ -1112,58 +1112,73 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
         if is_branch_node:
-            if st.button("★ 标记最终并覆盖主条目", key="sb_mark_final", use_container_width=True):
+            if st.button("★ Mark as Final", key="sb_mark_final", use_container_width=True):
                 resp = api_post(f"/history/{aid}/mark-final", {"root_id": root_id})
                 if resp.status_code == 200:
-                    st.toast("已标记最终版并覆盖主条目代码")
+                    st.toast("Marked as final and root entry code updated")
                     invalidate_history_cache()
                     st.rerun()
                 else:
-                    st.error(f"标记失败: {resp.text}")
+                    st.error(f"Mark failed: {resp.text}")
         else:
             ac1, ac2 = st.columns(2, gap="small")
             with ac1:
-                if st.button("★ 设为最终", key="sb_final", use_container_width=True):
+                if st.button("★ Set Final", key="sb_final", use_container_width=True):
                     api_post("/history/finalize", {"node_id": aid})
                     invalidate_history_cache()
                     st.rerun()
             with ac2:
-                if st.button("↑ 覆盖主干", key="sb_promote", use_container_width=True):
+                if st.button("↑ Promote to Root", key="sb_promote", use_container_width=True):
                     api_post(f"/history/{aid}/promote-main", {})
-                    st.toast("已覆盖主干")
+                    st.toast("Promoted to root")
                     invalidate_history_cache()
                     st.rerun()
 
-# ========== 主区 ==========
+# ========== Main area ==========
 st.markdown('<span class="brand">RoboStudio</span>', unsafe_allow_html=True)
 
-# ── 重命名反馈 ────────────────────────────────────────────────────────────
+# ── Rename feedback ────────────────────────────────────────────────────────────
 if st.session_state.get("_rename_error"):
     st.error(st.session_state.pop("_rename_error"))
 if st.session_state.get("_rename_toast"):
     st.toast(st.session_state.pop("_rename_toast"))
 
-# ── 模拟状态横幅 ─────────────────────────────────────────────────────────────
-if st.session_state.is_simulation_running:
-    render_browser_job_status(st.session_state.current_job_id)
-    if st.button("手动检查并加载结果", key="sync_job_result"):
+# ── Simulation status banner (fragment: polls every 2 s only while running) ──────
+# run_every is None when idle so the fragment does NOT auto-rerun and cannot
+# interfere with page layout during view switches.
+_poll_interval = 2 if st.session_state.is_simulation_running else None
+
+@st.fragment(run_every=_poll_interval)
+def _simulation_status_panel():
+    if st.session_state.is_simulation_running:
         _poll_job_status()
-elif st.session_state.sim_status_msg:
-    msg = st.session_state.sim_status_msg
-    if msg.startswith("✅"):
-        st.success(msg)
-    elif msg.startswith("❌"):
-        st.error(msg)
-    elif msg.startswith("⚫"):
-        st.info(msg)
-    else:
-        st.warning(msg)
+        if not st.session_state.is_simulation_running:
+            # Job just finished — one full rerun to refresh video/code/history
+            st.rerun()
+            return
+        render_browser_job_status(st.session_state.current_job_id)
+        if st.button("Check and Load Results", key="sync_job_result"):
+            _poll_job_status()
+            if not st.session_state.is_simulation_running:
+                st.rerun()
+    elif st.session_state.sim_status_msg:
+        msg = st.session_state.sim_status_msg
+        if msg.startswith("✅"):
+            st.success(msg)
+        elif msg.startswith("❌"):
+            st.error(msg)
+        elif msg.startswith("⚫"):
+            st.info(msg)
+        else:
+            st.warning(msg)
+
+_simulation_status_panel()
 
 center_col = st.container()
 
 with center_col:
     st.markdown(
-        "<div style='text-align:left;font-size:22px;font-weight:700;line-height:1.4;margin-bottom:0.4rem;'>RoboStudio 机械臂可视化操作平台</div>",
+        "<div style='text-align:left;font-size:22px;font-weight:700;line-height:1.4;margin-bottom:0.4rem;'>RoboStudio: Embodied-AI Algorithm Visualization Platform</div>",
         unsafe_allow_html=True,
     )
     with st.container(key="param_panel"):
@@ -1171,7 +1186,7 @@ with center_col:
             _hdr_title, _hdr_tools = st.columns([0.94, 0.06], vertical_alignment="center", gap="small")
             with _hdr_title:
                 st.markdown(
-                    "<span style='font-size:18px;font-weight:650;line-height:1;'>任务与参数</span>",
+                    "<span style='font-size:18px;font-weight:650;line-height:1;'>Task & Parameters</span>",
                     unsafe_allow_html=True,
                 )
             with _hdr_tools:
@@ -1181,22 +1196,22 @@ with center_col:
                     with st.popover("⚙", use_container_width=True):
                         api_key = st.text_input("API Key", type="password", key="openai_api_key_value")
                         api_url = st.text_input("API Base URL", key="openai_base_url_value")
-                        if st.button("获取模型列表", use_container_width=True, key="pop_fetch_models"):
+                        if st.button("Fetch Model List", use_container_width=True, key="pop_fetch_models"):
                             models, err = fetch_models(api_key, api_url)
                             if models:
                                 st.session_state.available_models = models
                             else:
-                                st.error(err or "获取失败")
+                                st.error(err or "Failed to fetch models")
                         if st.session_state.available_models:
                             if st.session_state.openai_model_value not in st.session_state.available_models:
                                 st.session_state.openai_model_value = st.session_state.available_models[0]
                             model = st.selectbox(
-                                "模型",
+                                "Model",
                                 st.session_state.available_models,
                                 key="openai_model_value",
                             )
                         else:
-                            model = st.text_input("模型", key="openai_model_value")
+                            model = st.text_input("Model", key="openai_model_value")
                         sync_api_settings_to_browser_storage(api_key, api_url, model)
                     st.markdown("</div>", unsafe_allow_html=True)
                 with _hdr_arrow:
@@ -1218,11 +1233,11 @@ with center_col:
         if not st.session_state.param_collapsed:
             main_param_cols = st.columns(2, gap="small")
             with main_param_cols[0]:
-                task_description = st.text_input("任务描述", value=st.session_state.task_description)
+                task_description = st.text_input("Task Description", value=st.session_state.task_description)
                 st.session_state.task_description = task_description
             with main_param_cols[1]:
                 selected_algorithm = st.selectbox(
-                    "算法",
+                    "Algorithm",
                     options=algos or [""],
                     key="selected_algorithm",
                 )
@@ -1246,37 +1261,37 @@ with center_col:
     action_cols = st.columns([1, 1, 1, 1])
     with action_cols[0]:
         run_button = st.button(
-            "⏹ 停止模拟" if st.session_state.is_simulation_running else "▶ 运行模拟",
+            "⏹ Stop Simulation" if st.session_state.is_simulation_running else "▶ Run Simulation",
             use_container_width=True,
             type="primary",
         )
     with action_cols[1]:
         apply_button = st.button(
-            "⏹ 停止" if st.session_state.is_simulation_running else "应用代码并模拟",
+            "⏹ Stop" if st.session_state.is_simulation_running else "Apply Code and Re-simulate",
             use_container_width=True,
             disabled=st.session_state.is_simulation_running,
         )
     with action_cols[2]:
-        new_draft_button = st.button("新建草稿", use_container_width=True)
+        new_draft_button = st.button("New Draft", use_container_width=True)
     with action_cols[3]:
-        save_draft_button = st.button("💾 保存草稿", use_container_width=True)
+        save_draft_button = st.button("💾 Save Draft", use_container_width=True)
 
     mid_cols = st.columns([1, 1], gap="small")
     with mid_cols[0]:
-        st.markdown("##### 视频")
+        st.markdown("##### Video")
         with st.container(border=True, key="video_panel"):
             video_data = st.session_state.simulation_video
             if st.session_state.is_simulation_running:
                 st.markdown(
                     "<div style='height:400px;display:flex;align-items:center;justify-content:center;"
-                    "font-size:14px;color:#888;'>⏳ 模拟运行中，完成后自动显示…</div>",
+                    "font-size:14px;color:#888;'>⏳ Simulation running, results will appear automatically…</div>",
                     unsafe_allow_html=True,
                 )
             elif video_data == "NO_VIDEO_SUPPORTED":
-                st.caption("无视频（文本计划）")
+                st.caption("No video (text planning)")
                 st.markdown("<div style='height:400px;'></div>", unsafe_allow_html=True)
             elif video_data == "E2E_NO_CODE_SUPPORTED":
-                st.caption("无视频（端到端）")
+                st.caption("No video (end-to-end)")
                 st.markdown("<div style='height:400px;'></div>", unsafe_allow_html=True)
             elif video_data:
                 try:
@@ -1310,14 +1325,14 @@ with center_col:
                         scrolling=False,
                     )
                 except Exception:
-                    st.warning("视频解析失败")
+                    st.warning("Video decoding failed")
                     st.markdown("<div style='height:400px;'></div>", unsafe_allow_html=True)
             else:
-                st.caption("暂无视频")
+                st.caption("No video available")
                 st.markdown("<div style='height:400px;'></div>", unsafe_allow_html=True)
 
     with mid_cols[1]:
-        st.markdown("##### 代码")
+        st.markdown("##### Code")
         edited_code = st_ace(
             value=st.session_state.code_editor or "",
             language="python",
@@ -1336,7 +1351,7 @@ with center_col:
         render_code_autosave_beacon()
 
 with st.container(key="notes_section"):
-    st.markdown("##### 备注（随当前选中节点）")
+    st.markdown("##### Notes (for selected node)")
     notes_key = f"notes_box_{st.session_state.selected_node_id or 'none'}"
     notes_text = st.text_area(
         "notes",
@@ -1345,15 +1360,15 @@ with st.container(key="notes_section"):
         key=notes_key,
         label_visibility="collapsed",
     )
-    if st.button("保存备注"):
+    if st.button("Save Notes"):
         if st.session_state.selected_node_id:
             save_notes(st.session_state.selected_node_id, notes_text)
             st.session_state.notes_input = notes_text
         else:
-            st.warning("请先在左侧栏选择一条记录")
+            st.warning("Please select a record in the left sidebar first")
 
 if st.session_state.run_result:
-    with st.expander("运行日志", expanded=False):
+    with st.expander("Run Log", expanded=False):
         st.code(st.session_state.run_result.get("log", ""), language="log")
 
 
@@ -1379,7 +1394,7 @@ def _extract_error_text(resp):
 
 
 def _start_job(resp):
-    """处理后端返回的 {job_id, status} 并更新 session state。"""
+    """Handle the {job_id, status} response from the backend and update session state."""
     if resp.status_code == 200:
         data = resp.json()
         job_id = data.get("job_id")
@@ -1387,26 +1402,26 @@ def _start_job(resp):
             st.session_state.current_job_id = job_id
             st.session_state.is_simulation_running = True
             st.session_state.sim_status_msg = ""
-            # 不清空代码：当前仍选中历史节点时，空编辑器会被自动保存回该节点。
+            # Do not clear code: when a history node is still selected, an empty editor would be auto-saved back.
             st.session_state.simulation_video = None
             st.session_state.run_result = {}
             st.rerun()
         else:
-            st.error("后端未返回 job_id，请检查服务日志。")
+            st.error("Backend did not return a job_id. Check the service log.")
     else:
-        st.error(f"启动失败（{resp.status_code}）：{_extract_error_text(resp)}")
+        st.error(f"Start failed ({resp.status_code}): {_extract_error_text(resp)}")
 
 
-# ── 运行模拟按钮 ──────────────────────────────────────────────────────────────
+# ── Run Simulation button ──────────────────────────────────────────────────────────
 if run_button:
     if st.session_state.is_simulation_running:
-        # 当前正在运行 → 停止
+        # Currently running → stop
         cancel_current_job()
-        st.session_state.sim_status_msg = "⚫ 模拟已取消"
+        st.session_state.sim_status_msg = "⚫ Simulation cancelled"
         st.rerun()
     else:
         if not selected_algorithm:
-            st.warning("请先选择算法")
+            st.warning("Please select an algorithm first")
             st.stop()
         api_key, api_url, model = get_global_api()
         payload = {
@@ -1422,17 +1437,17 @@ if run_button:
             resp = api_post(f"/run/{selected_algorithm}", payload, timeout=15)
             _start_job(resp)
         except requests.exceptions.RequestException as e:
-            st.error(f"启动失败: {e}")
+            st.error(f"Start failed: {e}")
 
-# ── 新建草稿按钮 ──────────────────────────────────────────────────────────────
-# 行为：创建一个独立的、未模拟的草稿主条目，区别于"保存草稿"创建分支草稿。
+# ── New Draft button ──────────────────────────────────────────────────────────────
+# Creates an independent, unsimulated draft root entry, distinct from Save Draft which creates a branch draft.
 if new_draft_button:
     if not selected_algorithm:
-        st.warning("请先选择算法")
+        st.warning("Please select an algorithm first")
     else:
         try:
             next_name = api_get("/next_draft_id").json().get(
-                "next_draft_name", f"草稿-{datetime.now().strftime('%H%M%S')}"
+                "next_draft_name", f"Draft-{datetime.now().strftime('%H%M%S')}"
             )
             resp = api_post(
                 "/history/draft",
@@ -1456,31 +1471,31 @@ if new_draft_button:
                 st.session_state.run_result = {}
                 st.session_state.notes_input = ""
                 st.session_state.ace_editor_version += 1
-                st.toast(f"已创建草稿主条目：{data.get('name', next_name)}")
+                st.toast(f"Draft root entry created: {data.get('name', next_name)}")
                 invalidate_history_cache()
                 st.rerun()
             else:
-                st.error(f"创建草稿主条目失败：{resp.text}")
+                st.error(f"Failed to create draft root entry: {resp.text}")
         except requests.exceptions.RequestException as e:
-            st.error(f"新建草稿失败: {e}")
+            st.error(f"Failed to create new draft: {e}")
 
-# ── 保存草稿按钮 ──────────────────────────────────────────────────────────────
-# 行为：永远在当前选中节点所属的"主条目（root）"下创建一个新的分支草稿，
-#      不再覆盖任何已有条目（包括草稿自身）。
+# ── Save Draft button ──────────────────────────────────────────────────────────────
+# Always creates a new branch draft under the root entry of the currently selected node,
+#      never overwriting any existing entry (including drafts).
 if save_draft_button:
     if not selected_algorithm:
-        st.warning("请先选择算法")
+        st.warning("Please select an algorithm first")
     elif not st.session_state.selected_node_id:
-        st.warning("请先在左侧栏选择一个主条目")
+        st.warning("Please select a root entry in the left sidebar first")
     else:
         try:
             code_to_save = st.session_state.code_editor or ""
             parent_id = find_main_root_id(st.session_state.selected_node_id, node_map)
             if parent_id is None:
-                st.warning("无法确定主条目，无法创建分支草稿")
+                st.warning("Cannot determine root entry; cannot create branch draft")
             else:
                 next_name = api_get(f"/next_draft_id?parent_id={parent_id}").json().get(
-                    "next_draft_name", f"草稿-{datetime.now().strftime('%H%M%S')}"
+                    "next_draft_name", f"Draft-{datetime.now().strftime('%H%M%S')}"
                 )
                 resp = api_post(
                     "/history/branch",
@@ -1499,20 +1514,20 @@ if save_draft_button:
                     data = resp.json()
                     st.session_state.current_draft_id = data["id"]
                     st.session_state.selected_node_id = data["id"]
-                    st.toast(f"分支草稿已创建：{data.get('name', next_name)}")
+                    st.toast(f"Branch draft created: {data.get('name', next_name)}")
                     invalidate_history_cache()
                     st.rerun()
                 else:
-                    st.error(f"创建分支草稿失败：{resp.text}")
+                    st.error(f"Failed to create branch draft: {resp.text}")
         except requests.exceptions.RequestException as e:
-            st.error(f"保存草稿失败: {e}")
+            st.error(f"Failed to save draft: {e}")
 
-# ── 应用代码并模拟按钮 ────────────────────────────────────────────────────────
-# 行为：永远将模拟结果写为"主条目下的新分支"，不再新建独立的主条目。
-#      仅当工作台完全空（没有任何选中节点）时，才允许退化为创建新主条目。
+# ── Apply Code and Re-simulate button ────────────────────────────────────────────
+# Always writes the simulation result as a new branch under the root entry.
+#      Falls back to creating a new root entry only when the workspace is completely empty.
 if apply_button and not st.session_state.is_simulation_running:
     if not selected_algorithm:
-        st.warning("请先选择算法")
+        st.warning("Please select an algorithm first")
         st.stop()
     api_key, api_url, model = get_global_api()
     main_root_id = find_main_root_id(st.session_state.selected_node_id, node_map)
@@ -1525,7 +1540,7 @@ if apply_button and not st.session_state.is_simulation_running:
         "task_description": st.session_state.task_description,
         "algorithm": selected_algorithm,
         "base_record_id": st.session_state.selected_node_id,
-        "parent_id": main_root_id,  # ← 关键：让后端把结果挂到主条目下
+        "parent_id": main_root_id,  # ← Key: instruct backend to attach the result under the root entry
         "notes": notes_text,
     }
     payload.update(dynamic_params)
@@ -1533,4 +1548,4 @@ if apply_button and not st.session_state.is_simulation_running:
         resp = api_post(f"/apply_code/{selected_algorithm}", payload, timeout=15)
         _start_job(resp)
     except requests.exceptions.RequestException as e:
-        st.error(f"启动失败: {e}")
+        st.error(f"Start failed: {e}")
