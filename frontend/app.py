@@ -671,8 +671,12 @@ section[data-testid="stSidebar"] div.st-key-tree_select_{nid} button {{
         if has_mark_button:
             with row_cols[1]:
                 if st.button("★", key=f"tree_mark_final_{nid}", use_container_width=True):
-                    resp = api_post(f"/history/{nid}/mark-final", {"root_id": node.get("parent_id")})
+                    branch_root_id = node.get("parent_id")
+                    resp = api_post(f"/history/{nid}/mark-final", {"root_id": branch_root_id})
                     if resp.status_code == 200:
+                        # If the root entry is currently displayed, auto-refresh it on next rerun
+                        if st.session_state.selected_node_id == branch_root_id:
+                            st.session_state._auto_refresh_node = True
                         st.toast("Marked as final and root entry code updated")
                         invalidate_history_cache()
                         st.rerun()
@@ -761,6 +765,21 @@ if "last_autosave_at" not in st.session_state:
     st.session_state.last_autosave_at = 0.0
 if "autosave_status_msg" not in st.session_state:
     st.session_state.autosave_status_msg = ""
+if "_auto_refresh_node" not in st.session_state:
+    st.session_state._auto_refresh_node = False
+
+
+def _refresh_active_node_display(node):
+    """Refresh display fields (code/video/result) from a freshly-fetched node.
+    Used after mark-final so the root entry view reflects the promoted branch
+    without triggering autosave or job-cancel side effects."""
+    result = parse_json_field(node.get("result"), {})
+    new_code = result.get("generated_code") or result.get("code") or ""
+    if new_code:
+        st.session_state.code_editor = new_code
+        st.session_state.ace_editor_version += 1
+    st.session_state.simulation_video = result.get("video")
+    st.session_state.run_result = result
 
 
 def autosave_current_code(force=False):
@@ -816,9 +835,17 @@ def render_code_autosave_beacon():
 
   function saveCode() {{
     const latest = parentWindow.__robotArmCodeAutosavePayload || {{}};
+    const codeToSave = latest.code || "";
+
+    // Always persist to localStorage so page-refresh can restore the draft
+    try {{
+      parentWindow.localStorage.setItem("current_code", codeToSave);
+    }} catch (e) {{}}
+
+    // Persist to backend only when a record is selected
     if (!latest.recordId || !latest.backendBase) return;
 
-    const payload = JSON.stringify({{ code: latest.code || "" }});
+    const payload = JSON.stringify({{ code: codeToSave }});
     const url = `${{latest.backendBase}}/history/${{latest.recordId}}/code`;
     if (parentWindow.navigator && parentWindow.navigator.sendBeacon) {{
       const blob = new Blob([payload], {{ type: "application/json" }});
@@ -1079,6 +1106,12 @@ if st.session_state.selected_node_id and st.session_state.selected_node_id in no
 else:
     active_node = None
 
+# After mark-final, if the user was viewing the root entry, refresh its display
+# using the now-updated node data (the backend has already promoted the branch code to root).
+if st.session_state._auto_refresh_node and active_node:
+    st.session_state._auto_refresh_node = False
+    _refresh_active_node_display(active_node)
+
 # ========== Left sidebar: VS Code file-tree style ==========
 with st.sidebar:
     st.markdown(
@@ -1115,6 +1148,9 @@ with st.sidebar:
             if st.button("★ Mark as Final", key="sb_mark_final", use_container_width=True):
                 resp = api_post(f"/history/{aid}/mark-final", {"root_id": root_id})
                 if resp.status_code == 200:
+                    # If the root entry is currently displayed, auto-refresh it on next rerun
+                    if st.session_state.selected_node_id == root_id:
+                        st.session_state._auto_refresh_node = True
                     st.toast("Marked as final and root entry code updated")
                     invalidate_history_cache()
                     st.rerun()
@@ -1345,8 +1381,6 @@ with center_col:
         if edited_code is not None:
             if edited_code != st.session_state.code_editor:
                 st.session_state.code_editor = edited_code
-                localS.setItem("current_code", edited_code, key="save_current_code")
-                autosave_current_code(force=False)
 
         render_code_autosave_beacon()
 
